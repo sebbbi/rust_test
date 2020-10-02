@@ -1,1 +1,1 @@
-"# rust_test" 
+# Rust Test
