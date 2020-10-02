@@ -13,8 +13,8 @@ use ash::vk;
 use winit::{
     event::{ElementState, Event, MouseButton, MouseScrollDelta, WindowEvent},
     event_loop::{ControlFlow, EventLoop},
-    window::{WindowBuilder},
     platform::desktop::EventLoopExtDesktop,
+    window::WindowBuilder,
 };
 
 mod vulkan_base;
@@ -34,10 +34,7 @@ pub struct Vector3 {
     pub _pad: f32,
 }
 
-pub struct App
-{
-
-}
+pub struct App {}
 
 fn main() {
     unsafe {
@@ -818,7 +815,7 @@ fn main() {
                         device.cmd_end_render_pass(draw_command_buffer);
                     },
                 );
-                
+
                 //let mut present_info_err = mem::zeroed();
                 let present_info = vk::PresentInfoKHR {
                     wait_semaphore_count: 1,
@@ -834,36 +831,35 @@ fn main() {
                     .unwrap();
 
                 frame = frame + 1;
-                if (frame % 60) == 0
-                {
+                if (frame % 60) == 0 {
                     let timeNow = Instant::now();
                     let interval = (timeNow - timeStart).as_millis();
-                    println!("Avg frame time: {}", interval as f32 / 60.0f32 );
+                    println!("Avg frame time: {}", interval as f32 / 60.0f32);
 
                     timeStart = timeNow;
-				}
+                }
             };
 
-    /*
-            events_loop.run(|event, _, control_flow| {
-                *control_flow = ControlFlow::Poll;
-                render_tick();
-                match event {
-                    Event::WindowEvent { event, .. } => match event {
-                        WindowEvent::KeyboardInput { input, .. } => {
-                            if let Some(VirtualKeyCode::Escape) = input.virtual_keycode {
-                                ControlFlow::Break
-                            } else {
-                                ControlFlow::Continue
-                            }
+            /*
+                    events_loop.run(|event, _, control_flow| {
+                        *control_flow = ControlFlow::Poll;
+                        render_tick();
+                        match event {
+                            Event::WindowEvent { event, .. } => match event {
+                                WindowEvent::KeyboardInput { input, .. } => {
+                                    if let Some(VirtualKeyCode::Escape) = input.virtual_keycode {
+                                        ControlFlow::Break
+                                    } else {
+                                        ControlFlow::Continue
+                                    }
+                                }
+                                WindowEvent::CloseRequested => ControlFlow::Break,
+                                _ => ControlFlow::Continue,
+                            },
+                            _ => ControlFlow::Continue,
                         }
-                        WindowEvent::CloseRequested => ControlFlow::Break,
-                        _ => ControlFlow::Continue,
-                    },
-                    _ => ControlFlow::Continue,
-                }
-            });
-    */
+                    });
+            */
             // Used to accumutate input events from the start to the end of a frame
             let mut is_left_clicked = None;
             let mut cursor_position = None;

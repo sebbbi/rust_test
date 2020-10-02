@@ -6,9 +6,7 @@ use ash::extensions::{
     khr::{Surface, Swapchain},
 };
 
-use winit::{
-    window::Window,
-};
+use winit::window::Window;
 
 const NUM_COMMAND_BUFFERS: u32 = 2;
 
@@ -322,14 +320,11 @@ impl VulkanBase {
                 .allocate_command_buffers(&command_buffer_allocate_info)
                 .unwrap();
 
-            let fence_info = vk::FenceCreateInfo::builder()
-                .flags(vk::FenceCreateFlags::SIGNALED);
+            let fence_info = vk::FenceCreateInfo::builder().flags(vk::FenceCreateFlags::SIGNALED);
 
             let command_buffer_fences: Vec<vk::Fence> = command_buffers
                 .iter()
-                .map(|&cb| {
-                    device.create_fence(&fence_info, None).unwrap()
-				})
+                .map(|&cb| device.create_fence(&fence_info, None).unwrap())
                 .collect();
 
             let present_images = swapchain_loader.get_swapchain_images(swapchain).unwrap();
@@ -544,9 +539,8 @@ impl VulkanBase {
 
             active_command_buffer = active_command_buffer + 1;
             if active_command_buffer >= self.command_buffer_fences.len() {
-               active_command_buffer = 0;          
-			}
-
+                active_command_buffer = 0;
+            }
 
             /*
             device
@@ -569,8 +563,8 @@ impl Drop for VulkanBase {
                 .destroy_semaphore(self.rendering_complete_semaphore, None);
 
             for &fence in self.command_buffer_fences.iter() {
-                self.device.destroy_fence(fence, None);        
-			}
+                self.device.destroy_fence(fence, None);
+            }
 
             self.device.free_memory(self.depth_image_memory, None);
             self.device.destroy_image_view(self.depth_image_view, None);
