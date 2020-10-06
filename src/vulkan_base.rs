@@ -8,14 +8,14 @@ use ash::extensions::{
 
 use winit::window::Window;
 
-const NUM_COMMAND_BUFFERS: u32 = 2;
-
 pub use ash::version::{DeviceV1_0, EntryV1_0, InstanceV1_0};
 use ash::{vk, Device, Entry, Instance};
 use std::borrow::Cow;
 use std::default::Default;
 use std::ffi::{CStr, CString};
 use std::ops::Drop;
+
+const NUM_COMMAND_BUFFERS: u32 = 3;
 
 // Simple offset_of macro akin to C++ offsetof
 #[macro_export]
@@ -97,6 +97,69 @@ pub fn find_memorytype_index_f<F: Fn(vk::MemoryPropertyFlags, vk::MemoryProperty
     None
 }
 
+pub struct CommandBuffer {
+    command_buffer: vk::CommandBuffer,
+    fence: vk::Fence,
+}
+
+pub struct CommandBufferPool {
+    pub pool: vk::CommandPool,
+    pub command_buffers: Vec<CommandBuffer>,
+}
+
+impl CommandBufferPool {
+    pub fn new(
+        device: &Device,
+        queue_family_index: u32,
+        num_command_buffers: u32,
+    ) -> CommandBufferPool {
+        unsafe {
+            let pool_create_info = vk::CommandPoolCreateInfo::builder()
+                .flags(vk::CommandPoolCreateFlags::RESET_COMMAND_BUFFER)
+                .queue_family_index(queue_family_index);
+
+            let pool = device.create_command_pool(&pool_create_info, None).unwrap();
+
+            let command_buffer_allocate_info = vk::CommandBufferAllocateInfo::builder()
+                .command_buffer_count(num_command_buffers)
+                .command_pool(pool)
+                .level(vk::CommandBufferLevel::PRIMARY);
+
+            let command_buffers = device
+                .allocate_command_buffers(&command_buffer_allocate_info)
+                .unwrap();
+
+            let fence_info = vk::FenceCreateInfo::builder().flags(vk::FenceCreateFlags::SIGNALED);
+
+            let command_buffers: Vec<CommandBuffer> = command_buffers
+                .iter()
+                .map(|&command_buffer| {
+                    let fence = device.create_fence(&fence_info, None).unwrap();
+                    CommandBuffer {
+                        command_buffer,
+                        fence,
+                    }
+                })
+                .collect();
+
+            CommandBufferPool {
+                pool,
+                command_buffers,
+            }
+        }
+    }
+
+    pub fn clean_up(&self, device: &Device) {
+        unsafe {
+            for command_buffer in self.command_buffers.iter() {
+                device.destroy_fence(command_buffer.fence, None);
+            }
+
+            device.destroy_command_pool(self.pool, None);
+        }
+    }
+}
+
 pub struct VulkanBase {
     pub entry: Entry,
     pub instance: Instance,
@@ -119,18 +182,14 @@ pub struct VulkanBase {
     pub present_images: Vec<vk::Image>,
     pub present_image_views: Vec<vk::ImageView>,
 
-    pub pool: vk::CommandPool,
-    //pub draw_command_buffer: vk::CommandBuffer,
-    //pub setup_command_buffer: vk::CommandBuffer,
-    pub command_buffers: Vec<vk::CommandBuffer>,
-    pub command_buffer_fences: Vec<vk::Fence>,
-
     pub depth_image: vk::Image,
     pub depth_image_view: vk::ImageView,
     pub depth_image_memory: vk::DeviceMemory,
 
     pub present_complete_semaphore: vk::Semaphore,
     pub rendering_complete_semaphore: vk::Semaphore,
+
+    pub command_buffer_pool: CommandBufferPool,
 }
 
 impl VulkanBase {
@@ -305,28 +364,6 @@ impl VulkanBase {
                 .create_swapchain(&swapchain_create_info, None)
                 .unwrap();
 
-            let pool_create_info = vk::CommandPoolCreateInfo::builder()
-                .flags(vk::CommandPoolCreateFlags::RESET_COMMAND_BUFFER)
-                .queue_family_index(queue_family_index);
-
-            let pool = device.create_command_pool(&pool_create_info, None).unwrap();
-
-            let command_buffer_allocate_info = vk::CommandBufferAllocateInfo::builder()
-                .command_buffer_count(NUM_COMMAND_BUFFERS)
-                .command_pool(pool)
-                .level(vk::CommandBufferLevel::PRIMARY);
-
-            let command_buffers = device
-                .allocate_command_buffers(&command_buffer_allocate_info)
-                .unwrap();
-
-            let fence_info = vk::FenceCreateInfo::builder().flags(vk::FenceCreateFlags::SIGNALED);
-
-            let command_buffer_fences: Vec<vk::Fence> = command_buffers
-                .iter()
-                .map(|&cb| device.create_fence(&fence_info, None).unwrap())
-                .collect();
-
             let present_images = swapchain_loader.get_swapchain_images(swapchain).unwrap();
             let present_image_views: Vec<vk::ImageView> = present_images
                 .iter()
@@ -413,6 +450,9 @@ impl VulkanBase {
                 .create_semaphore(&semaphore_create_info, None)
                 .unwrap();
 
+            let command_buffer_pool =
+                CommandBufferPool::new(&device, queue_family_index, NUM_COMMAND_BUFFERS);
+
             let vk = VulkanBase {
                 entry,
                 instance,
@@ -428,9 +468,6 @@ impl VulkanBase {
                 swapchain,
                 present_images,
                 present_image_views,
-                pool,
-                command_buffers,
-                command_buffer_fences,
                 depth_image,
                 depth_image_view,
                 present_complete_semaphore,
@@ -439,6 +476,7 @@ impl VulkanBase {
                 debug_call_back,
                 debug_utils_loader,
                 depth_image_memory,
+                command_buffer_pool,
             };
 
             vk.record_submit_commandbuffer(
@@ -482,16 +520,18 @@ impl VulkanBase {
 
     pub fn record_submit_commandbuffer<F: FnOnce(&Device, vk::CommandBuffer)>(
         &self,
-        mut active_command_buffer: usize,
+        active_command_buffer: usize,
         submit_queue: vk::Queue,
         wait_mask: &[vk::PipelineStageFlags],
         wait_semaphores: &[vk::Semaphore],
         signal_semaphores: &[vk::Semaphore],
         f: F,
-    ) {
+    ) -> usize {
         unsafe {
-            let submit_fence = self.command_buffer_fences[active_command_buffer];
-            let command_buffer = self.command_buffers[active_command_buffer];
+            let submit_fence =
+                self.command_buffer_pool.command_buffers[active_command_buffer].fence;
+            let command_buffer =
+                self.command_buffer_pool.command_buffers[active_command_buffer].command_buffer;
 
             self.device
                 .wait_for_fences(&[submit_fence], true, std::u64::MAX)
@@ -519,12 +559,6 @@ impl VulkanBase {
                 .end_command_buffer(command_buffer)
                 .expect("End commandbuffer");
 
-            /*
-            let submit_fence = device
-                .create_fence(&vk::FenceCreateInfo::default(), None)
-                .expect("Create fence failed.");
-                */
-
             let command_buffers = vec![command_buffer];
 
             let submit_info = vk::SubmitInfo::builder()
@@ -536,19 +570,13 @@ impl VulkanBase {
             self.device
                 .queue_submit(submit_queue, &[submit_info.build()], submit_fence)
                 .expect("queue submit failed.");
+        }
 
-            active_command_buffer = active_command_buffer + 1;
-            if active_command_buffer >= self.command_buffer_fences.len() {
-                active_command_buffer = 0;
-            }
-
-            /*
-            device
-                .wait_for_fences(&[submit_fence], true, std::u64::MAX)
-                .expect("Wait for fence failed.");
-
-            device.destroy_fence(submit_fence, None);
-            */
+        let next_command_buffer = active_command_buffer + 1;
+        if next_command_buffer < self.command_buffer_pool.command_buffers.len() {
+            next_command_buffer
+        } else {
+            0
         }
     }
 }
@@ -562,9 +590,7 @@ impl Drop for VulkanBase {
             self.device
                 .destroy_semaphore(self.rendering_complete_semaphore, None);
 
-            for &fence in self.command_buffer_fences.iter() {
-                self.device.destroy_fence(fence, None);
-            }
+            self.command_buffer_pool.clean_up(&self.device);
 
             self.device.free_memory(self.depth_image_memory, None);
             self.device.destroy_image_view(self.depth_image_view, None);
@@ -572,7 +598,6 @@ impl Drop for VulkanBase {
             for &image_view in self.present_image_views.iter() {
                 self.device.destroy_image_view(image_view, None);
             }
-            self.device.destroy_command_pool(self.pool, None);
             self.swapchain_loader
                 .destroy_swapchain(self.swapchain, None);
             self.device.destroy_device(None);

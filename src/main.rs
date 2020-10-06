@@ -726,7 +726,7 @@ fn main() {
         let graphic_pipeline = graphics_pipelines[0];
 
         {
-            let mut timeStart = Instant::now();
+            let mut time_start = Instant::now();
             let mut frame = 0u32;
             let mut active_command_buffer = 0;
 
@@ -763,7 +763,7 @@ fn main() {
                     })
                     .clear_values(&clear_values);
 
-                base.record_submit_commandbuffer(
+                active_command_buffer = base.record_submit_commandbuffer(
                     active_command_buffer,
                     base.present_queue,
                     &[vk::PipelineStageFlags::BOTTOM_OF_PIPE],
@@ -830,13 +830,13 @@ fn main() {
                     .queue_present(base.present_queue, &present_info)
                     .unwrap();
 
-                frame = frame + 1;
+                frame += 1;
                 if (frame % 60) == 0 {
-                    let timeNow = Instant::now();
-                    let interval = (timeNow - timeStart).as_millis();
+                    let time_now = Instant::now();
+                    let interval = (time_now - time_start).as_millis();
                     println!("Avg frame time: {}", interval as f32 / 60.0f32);
 
-                    timeStart = timeNow;
+                    time_start = time_now;
                 }
             };
 
