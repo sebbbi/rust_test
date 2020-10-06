@@ -20,18 +20,13 @@ use winit::{
 mod vulkan_base;
 use vulkan_base::*;
 
+mod minivector;
+use minivector::*;
+
 #[derive(Clone, Debug, Copy)]
 struct Vertex {
     pos: [f32; 4],
     uv: [f32; 2],
-}
-
-#[derive(Clone, Debug, Copy)]
-pub struct Vector3 {
-    pub x: f32,
-    pub y: f32,
-    pub z: f32,
-    pub _pad: f32,
 }
 
 pub struct App {}
@@ -233,11 +228,11 @@ fn main() {
             .bind_buffer_memory(vertex_input_buffer, vertex_input_buffer_memory, 0)
             .unwrap();
 
-        let uniform_color_buffer_data = Vector3 {
+        let uniform_color_buffer_data = Vec4 {
             x: 1.0,
             y: 1.0,
             z: 1.0,
-            _pad: 0.0,
+            w: 0.0,
         };
         let uniform_color_buffer_info = vk::BufferCreateInfo {
             size: std::mem::size_of_val(&uniform_color_buffer_data) as u64,
@@ -279,7 +274,7 @@ fn main() {
             .unwrap();
         let mut uniform_aligned_slice = Align::new(
             uniform_ptr,
-            align_of::<Vector3>() as u64,
+            align_of::<Vec4>() as u64,
             uniform_color_buffer_memory_req.size,
         );
         uniform_aligned_slice.copy_from_slice(&[uniform_color_buffer_data]);
