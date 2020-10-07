@@ -49,3 +49,124 @@ fn mul(a: Mat4x4, b: Mat4x4) -> Mat4x4 {
         },
     }
 }
+
+fn projection(fovy: f32, aspect: f32, znear: f32, zfar: f32) -> Mat4x4 {
+    let h = 1.0 / (fovy * 0.5).tan();
+    let w = h / aspect;
+    let a = zfar / (zfar - znear);
+    let b = (-znear * zfar) / (zfar - znear);
+
+    Mat4x4 {
+        r0: Vec4 {
+            x: w,
+            y: 0.0,
+            z: 0.0,
+            w: 0.0,
+        },
+        r1: Vec4 {
+            x: 0.0,
+            y: h,
+            z: 0.0,
+            w: 0.0,
+        },
+        r2: Vec4 {
+            x: 0.0,
+            y: 0.0,
+            z: a,
+            w: b,
+        },
+        r3: Vec4 {
+            x: 0.0,
+            y: 0.0,
+            z: 1.0,
+            w: 0.0,
+        },
+    }
+}
+
+fn rot_x_axis(r: f32) -> Mat4x4 {
+    Mat4x4 {
+        r0: Vec4 {
+            x: 1.0,
+            y: 0.0,
+            z: 0.0,
+            w: 0.0,
+        },
+        r1: Vec4 {
+            x: 0.0,
+            y: r.cos(),
+            z: r.sin(),
+            w: 0.0,
+        },
+        r2: Vec4 {
+            x: 0.0,
+            y: -r.sin(),
+            z: r.cos(),
+            w: 0.0,
+        },
+        r3: Vec4 {
+            x: 0.0,
+            y: 0.0,
+            z: 0.0,
+            w: 1.0,
+        },
+    }
+}
+
+fn rot_y_axis(r: f32) -> Mat4x4 {
+    Mat4x4 {
+        r0: Vec4 {
+            x: r.cos(),
+            y: 0.0,
+            z: -r.sin(),
+            w: 0.0,
+        },
+        r1: Vec4 {
+            x: 0.0,
+            y: 1.0,
+            z: 0.0,
+            w: 0.0,
+        },
+        r2: Vec4 {
+            x: r.sin(),
+            y: 0.0,
+            z: r.cos(),
+            w: 0.0,
+        },
+        r3: Vec4 {
+            x: 0.0,
+            y: 0.0,
+            z: 0.0,
+            w: 1.0,
+        },
+    }
+}
+
+fn rot_z_axis(r: f32) -> Mat4x4 {
+    Mat4x4 {
+        r0: Vec4 {
+            x: r.cos(),
+            y: r.sin(),
+            z: 0.0,
+            w: 0.0,
+        },
+        r1: Vec4 {
+            x: -r.sin(),
+            y: r.cos(),
+            z: 0.0,
+            w: 0.0,
+        },
+        r2: Vec4 {
+            x: 0.0,
+            y: 0.0,
+            z: 1.0,
+            w: 0.0,
+        },
+        r3: Vec4 {
+            x: 0.0,
+            y: 0.0,
+            z: 0.0,
+            w: 1.0,
+        },
+    }
+}
