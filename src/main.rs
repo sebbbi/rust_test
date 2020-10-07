@@ -228,59 +228,98 @@ fn main() {
             .bind_buffer_memory(vertex_input_buffer, vertex_input_buffer_memory, 0)
             .unwrap();
 
-        let uniform_color_buffer_data = Vec4 {
-            x: 1.0,
-            y: 1.0,
-            z: 1.0,
-            w: 0.0,
+        #[derive(Clone, Debug, Copy)]
+        struct Uniforms {
+            WVP: Mat4x4,
+            color: Vec4,
+        }
+
+        let uniform_buffer_data = Uniforms {
+            WVP: {
+                mul(
+                    view(
+                        Vec3 {
+                            x: 0.0,
+                            y: 2.0,
+                            z: -5.0,
+                        },
+                        Vec3 {
+                            x: 0.0,
+                            y: 0.0,
+                            z: 1.0,
+                        },
+                        Vec3 {
+                            x: 1.0,
+                            y: 0.0,
+                            z: 0.0,
+                        },
+                        Vec3 {
+                            x: 0.0,
+                            y: 1.0,
+                            z: 0.0,
+                        },
+                    ),
+                    projection(
+                        std::f32::consts::PI / 2.0,
+                        window_width as f32 / window_height as f32,
+                        0.1,
+                        1000.0,
+                    ),
+                )
+            },
+            color: Vec4 {
+                x: 1.0,
+                y: 1.0,
+                z: 1.0,
+                w: 0.0,
+            },
         };
-        let uniform_color_buffer_info = vk::BufferCreateInfo {
-            size: std::mem::size_of_val(&uniform_color_buffer_data) as u64,
+
+        let uniform_buffer_info = vk::BufferCreateInfo {
+            size: std::mem::size_of_val(&uniform_buffer_data) as u64,
             usage: vk::BufferUsageFlags::UNIFORM_BUFFER,
             sharing_mode: vk::SharingMode::EXCLUSIVE,
             ..Default::default()
         };
-        let uniform_color_buffer = base
+        let uniform_buffer = base
             .device
-            .create_buffer(&uniform_color_buffer_info, None)
+            .create_buffer(&uniform_buffer_info, None)
             .unwrap();
-        let uniform_color_buffer_memory_req = base
-            .device
-            .get_buffer_memory_requirements(uniform_color_buffer);
-        let uniform_color_buffer_memory_index = find_memorytype_index(
-            &uniform_color_buffer_memory_req,
+        let uniform_buffer_memory_req = base.device.get_buffer_memory_requirements(uniform_buffer);
+        let uniform_buffer_memory_index = find_memorytype_index(
+            &uniform_buffer_memory_req,
             &base.device_memory_properties,
             vk::MemoryPropertyFlags::HOST_VISIBLE | vk::MemoryPropertyFlags::HOST_COHERENT,
         )
         .expect("Unable to find suitable memorytype for the vertex buffer.");
 
-        let uniform_color_buffer_allocate_info = vk::MemoryAllocateInfo {
-            allocation_size: uniform_color_buffer_memory_req.size,
-            memory_type_index: uniform_color_buffer_memory_index,
+        let uniform_buffer_allocate_info = vk::MemoryAllocateInfo {
+            allocation_size: uniform_buffer_memory_req.size,
+            memory_type_index: uniform_buffer_memory_index,
             ..Default::default()
         };
-        let uniform_color_buffer_memory = base
+        let uniform_buffer_memory = base
             .device
-            .allocate_memory(&uniform_color_buffer_allocate_info, None)
+            .allocate_memory(&uniform_buffer_allocate_info, None)
             .unwrap();
         let uniform_ptr = base
             .device
             .map_memory(
-                uniform_color_buffer_memory,
+                uniform_buffer_memory,
                 0,
-                uniform_color_buffer_memory_req.size,
+                uniform_buffer_memory_req.size,
                 vk::MemoryMapFlags::empty(),
             )
             .unwrap();
         let mut uniform_aligned_slice = Align::new(
             uniform_ptr,
             align_of::<Vec4>() as u64,
-            uniform_color_buffer_memory_req.size,
+            uniform_buffer_memory_req.size,
         );
-        uniform_aligned_slice.copy_from_slice(&[uniform_color_buffer_data]);
-        base.device.unmap_memory(uniform_color_buffer_memory);
+        uniform_aligned_slice.copy_from_slice(&[uniform_buffer_data]);
+        base.device.unmap_memory(uniform_buffer_memory);
         base.device
-            .bind_buffer_memory(uniform_color_buffer, uniform_color_buffer_memory, 0)
+            .bind_buffer_memory(uniform_buffer, uniform_buffer_memory, 0)
             .unwrap();
 
         let image = image::load_from_memory(include_bytes!("../assets/rust.png"))
@@ -533,10 +572,10 @@ fn main() {
             .allocate_descriptor_sets(&desc_alloc_info)
             .unwrap();
 
-        let uniform_color_buffer_descriptor = vk::DescriptorBufferInfo {
-            buffer: uniform_color_buffer,
+        let uniform_buffer_descriptor = vk::DescriptorBufferInfo {
+            buffer: uniform_buffer,
             offset: 0,
-            range: mem::size_of_val(&uniform_color_buffer_data) as u64,
+            range: mem::size_of_val(&uniform_buffer_data) as u64,
         };
 
         let tex_descriptor = vk::DescriptorImageInfo {
@@ -550,7 +589,7 @@ fn main() {
                 dst_set: descriptor_sets[0],
                 descriptor_count: 1,
                 descriptor_type: vk::DescriptorType::UNIFORM_BUFFER,
-                p_buffer_info: &uniform_color_buffer_descriptor,
+                p_buffer_info: &uniform_buffer_descriptor,
                 ..Default::default()
             },
             vk::WriteDescriptorSet {
@@ -564,8 +603,8 @@ fn main() {
         ];
         base.device.update_descriptor_sets(&write_desc_sets, &[]);
 
-        let mut vertex_spv_file = Cursor::new(&include_bytes!("../shader/texture/vert.spv")[..]);
-        let mut frag_spv_file = Cursor::new(&include_bytes!("../shader/texture/frag.spv")[..]);
+        let mut vertex_spv_file = Cursor::new(&include_bytes!("../shader/main_vert.spv")[..]);
+        let mut frag_spv_file = Cursor::new(&include_bytes!("../shader/main_frag.spv")[..]);
 
         let vertex_code =
             read_spv(&mut vertex_spv_file).expect("Failed to read vertex shader spv file");
@@ -963,8 +1002,8 @@ fn main() {
         base.device.destroy_image(texture_image, None);
         base.device.free_memory(index_buffer_memory, None);
         base.device.destroy_buffer(index_buffer, None);
-        base.device.free_memory(uniform_color_buffer_memory, None);
-        base.device.destroy_buffer(uniform_color_buffer, None);
+        base.device.free_memory(uniform_buffer_memory, None);
+        base.device.destroy_buffer(uniform_buffer, None);
         base.device.free_memory(vertex_input_buffer_memory, None);
         base.device.destroy_buffer(vertex_input_buffer, None);
         for &descriptor_set_layout in desc_set_layouts.iter() {
