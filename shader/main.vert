@@ -13,5 +13,5 @@ layout (location = 1) in vec2 uv;
 layout (location = 0) out vec2 o_uv;
 void main() {
     o_uv = uv;
-    gl_Position = pos;//ubo.WVP * pos;
+    gl_Position = ubo.WVP * pos;
 }

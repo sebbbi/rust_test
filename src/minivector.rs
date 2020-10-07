@@ -109,6 +109,35 @@ pub fn mul(a: Mat4x4, b: Mat4x4) -> Mat4x4 {
     }
 }
 
+pub fn identity() -> Mat4x4 {
+    Mat4x4 {
+        r0: Vec4 {
+            x: 1.0,
+            y: 0.0,
+            z: 0.0,
+            w: 0.0,
+        },
+        r1: Vec4 {
+            x: 0.0,
+            y: 1.0,
+            z: 0.0,
+            w: 0.0,
+        },
+        r2: Vec4 {
+            x: 0.0,
+            y: 0.0,
+            z: 1.0,
+            w: 0.0,
+        },
+        r3: Vec4 {
+            x: 0.0,
+            y: 0.0,
+            z: 0.0,
+            w: 1.0,
+        },
+    }
+}
+
 pub fn view(position: Vec3, forward: Vec3, right: Vec3, up: Vec3) -> Mat4x4 {
     Mat4x4 {
         r0: Vec4 {
@@ -164,6 +193,30 @@ pub fn projection(fovy: f32, aspect: f32, znear: f32, zfar: f32) -> Mat4x4 {
             z: 1.0,
             w: 0.0,
         },
+    }
+}
+
+pub fn translate(position: Vec3) -> Mat4x4 {
+    Mat4x4 {
+        r0: Vec4 {
+            x: 1.0,
+            y: 0.0,
+            z: 0.0,
+            w: 0.0,
+        },
+        r1: Vec4 {
+            x: 0.0,
+            y: 1.0,
+            z: 0.0,
+            w: 0.0,
+        },
+        r2: Vec4 {
+            x: 0.0,
+            y: 0.0,
+            z: 1.0,
+            w: 0.0,
+        },
+        r3: position.to_4d(),
     }
 }
 

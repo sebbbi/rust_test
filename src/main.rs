@@ -237,6 +237,15 @@ fn main() {
         let uniform_buffer_data = Uniforms {
             WVP: {
                 mul(
+                    identity(),
+                    translate(Vec3 {
+                        x: 0.2,
+                        y: 0.0,
+                        z: 0.0,
+                    }),
+                )
+                /*
+                mul(
                     view(
                         Vec3 {
                             x: 0.0,
@@ -266,11 +275,12 @@ fn main() {
                         1000.0,
                     ),
                 )
+                */
             },
             color: Vec4 {
-                x: 1.0,
-                y: 1.0,
-                z: 1.0,
+                x: 0.3,
+                y: 0.6,
+                z: 0.9,
                 w: 0.0,
             },
         };
