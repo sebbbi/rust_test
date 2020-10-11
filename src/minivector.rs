@@ -8,7 +8,7 @@ pub struct Vec3 {
 }
 
 impl Vec3 {
-    pub fn to_4d(&self) -> Vec4 {
+    pub fn to_4d(self) -> Vec4 {
         Vec4 {
             x: self.x,
             y: self.y,
@@ -16,6 +16,24 @@ impl Vec3 {
             w: 1.0,
         }
     }
+
+    pub fn dot(self, other: Vec3) -> f32 {
+        self.x * other.x + self.y * other.y + self.z * other.z 
+    }
+
+    pub fn cross(self, other: Vec3) -> Vec3 {
+        Vec3 {
+            x: (self.y * other.z) - (self.z * other.y),
+            y: (self.z * other.x) - (self.x * other.z),
+            z: (self.x * other.y) - (self.y * other.x),
+        }
+    }
+
+    pub fn normalize(self) -> Vec3 {
+        let l2 = (self.x * self.x + self.y * self.y + self.z * self.z);
+        let l_inv = 1.0 / l2.sqrt();
+        Vec3 { x: self.x * l_inv, y: self.y * l_inv, z: self.z * l_inv}
+	}
 }
 
 impl ops::Add<Vec3> for Vec3 {
@@ -63,13 +81,19 @@ pub struct Vec4 {
 }
 
 impl Vec4 {
-    pub fn to_3d(&self) -> Vec3 {
+    pub fn to_3d(self) -> Vec3 {
         Vec3 {
             x: self.x,
             y: self.y,
             z: self.z,
         }
     }
+
+    pub fn normalize(self) -> Vec4 {
+        let l2 = (self.x * self.x + self.y * self.y + self.z * self.z + self.w * self.w);
+        let l_inv = 1.0 / l2.sqrt();
+        Vec4 { x: self.x * l_inv, y: self.y * l_inv, z: self.z * l_inv, w: self.w * l_inv }
+	}
 }
 
 #[derive(Clone, Debug, Copy)]
@@ -138,27 +162,36 @@ pub fn identity() -> Mat4x4 {
     }
 }
 
-pub fn view(position: Vec3, forward: Vec3, right: Vec3, up: Vec3) -> Mat4x4 {
+pub fn view(position: Vec3, forward: Vec3, up: Vec3) -> Mat4x4 {
+    let forward = forward.normalize();
+    let right = up.cross(forward).normalize();
+    let up = forward.cross(right).normalize();
+
     Mat4x4 {
         r0: Vec4 {
-            x: forward.x,
-            y: right.x,
-            z: up.x,
+            x: right.x,
+            y: up.x,
+            z: forward.x,
             w: 0.0,
         },
         r1: Vec4 {
-            x: forward.y,
-            y: right.y,
-            z: up.y,
+            x: right.y,
+            y: up.y,
+            z: forward.y,
             w: 0.0,
         },
         r2: Vec4 {
-            x: forward.z,
-            y: right.z,
-            z: up.z,
+            x: right.z,
+            y: up.z,
+            z: forward.z,
             w: 0.0,
         },
-        r3: (-position).to_4d(),
+        r3: Vec4 {
+            x: -position.dot(right),
+            y: -position.dot(up),
+            z: -position.dot(forward),
+            w: 1.0,
+        },
     }
 }
 
@@ -185,12 +218,43 @@ pub fn projection(fovy: f32, aspect: f32, znear: f32, zfar: f32) -> Mat4x4 {
             x: 0.0,
             y: 0.0,
             z: a,
-            w: b,
+            w: 1.0,
         },
         r3: Vec4 {
             x: 0.0,
             y: 0.0,
-            z: 1.0,
+            z: b,
+            w: 0.0,
+        },
+    }
+}
+
+pub fn projection2(fovy: f32, aspect: f32, znear: f32, zfar: f32) -> Mat4x4 {
+    let f = 1.0 / (fovy * 0.5).tan();
+
+    Mat4x4 {
+        r0: Vec4 {
+            x: f / aspect,
+            y: 0.0,
+            z: 0.0,
+            w: 0.0,
+        },
+        r1: Vec4 {
+            x: 0.0,
+            y: -f,
+            z: 0.0,
+            w: 0.0,
+        },
+        r2: Vec4 {
+            x: 0.0,
+            y: 0.0,
+            z: zfar / (znear - zfar),
+            w: -1.0,
+        },
+        r3: Vec4 {
+            x: 0.0,
+            y: 0.0,
+            z: (znear * zfar) / (znear - zfar),
             w: 0.0,
         },
     }

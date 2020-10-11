@@ -33,8 +33,8 @@ pub struct App {}
 
 fn main() {
     unsafe {
-        let window_width = 1920;
-        let window_height = 1080;
+        let window_width = 1280;
+        let window_height = 720;
 
         let mut events_loop = EventLoop::new();
         let window = WindowBuilder::new()
@@ -116,7 +116,19 @@ fn main() {
                     .unwrap()
             })
             .collect();
-        let index_buffer_data = [0u32, 1, 2, 2, 3, 0];
+        let index_buffer_data = [
+            0u32, 2, 1, 
+            2, 3, 1,
+            2, 6, 3,
+            6, 7, 3,
+            7, 1, 3,
+            7, 5, 1,
+            5, 4, 1,
+            1, 4, 0,
+            0, 4, 6,
+            0, 6, 2,
+            6, 5, 7,
+            6, 4, 5];
         let index_buffer_info = vk::BufferCreateInfo {
             size: std::mem::size_of_val(&index_buffer_data) as u64,
             usage: vk::BufferUsageFlags::INDEX_BUFFER,
@@ -162,20 +174,36 @@ fn main() {
 
         let vertices = [
             Vertex {
-                pos: [-1.0, -1.0, 0.0, 1.0],
+                pos: [-1.0, 1.0, 1.0, 1.0],
                 uv: [0.0, 0.0],
             },
             Vertex {
-                pos: [-1.0, 1.0, 0.0, 1.0],
+                pos: [1.0, 1.0, 1.0, 1.0],
+                uv: [1.0, 0.0],
+            },
+            Vertex {
+                pos: [-1.0, 1.0, -1.0, 1.0],
                 uv: [0.0, 1.0],
             },
             Vertex {
-                pos: [1.0, 1.0, 0.0, 1.0],
+                pos: [1.0, 1.0, -1.0, 1.0],
                 uv: [1.0, 1.0],
             },
             Vertex {
-                pos: [1.0, -1.0, 0.0, 1.0],
+                pos: [-1.0, -1.0, 1.0, 1.0],
+                uv: [0.0, 0.0],
+            },
+            Vertex {
+                pos: [1.0, -1.0, 1.0, 1.0],
                 uv: [1.0, 0.0],
+            },
+            Vertex {
+                pos: [-1.0, -1.0, -1.0, 1.0],
+                uv: [0.0, 1.0],
+            },
+            Vertex {
+                pos: [1.0, -1.0, -1.0, 1.0],
+                uv: [1.0, 1.0],
             },
         ];
         let vertex_input_buffer_info = vk::BufferCreateInfo {
@@ -230,63 +258,12 @@ fn main() {
 
         #[derive(Clone, Debug, Copy)]
         struct Uniforms {
-            WVP: Mat4x4,
+            model_to_world: Mat4x4,
             color: Vec4,
         }
 
-        let uniform_buffer_data = Uniforms {
-            WVP: {
-                mul(
-                    identity(),
-                    translate(Vec3 {
-                        x: 0.2,
-                        y: 0.0,
-                        z: 0.0,
-                    }),
-                )
-                /*
-                mul(
-                    view(
-                        Vec3 {
-                            x: 0.0,
-                            y: 2.0,
-                            z: -5.0,
-                        },
-                        Vec3 {
-                            x: 0.0,
-                            y: 0.0,
-                            z: 1.0,
-                        },
-                        Vec3 {
-                            x: 1.0,
-                            y: 0.0,
-                            z: 0.0,
-                        },
-                        Vec3 {
-                            x: 0.0,
-                            y: 1.0,
-                            z: 0.0,
-                        },
-                    ),
-                    projection(
-                        std::f32::consts::PI / 2.0,
-                        window_width as f32 / window_height as f32,
-                        0.1,
-                        1000.0,
-                    ),
-                )
-                */
-            },
-            color: Vec4 {
-                x: 0.3,
-                y: 0.6,
-                z: 0.9,
-                w: 0.0,
-            },
-        };
-
         let uniform_buffer_info = vk::BufferCreateInfo {
-            size: std::mem::size_of_val(&uniform_buffer_data) as u64,
+            size: std::mem::size_of::<Uniforms>() as u64,
             usage: vk::BufferUsageFlags::UNIFORM_BUFFER,
             sharing_mode: vk::SharingMode::EXCLUSIVE,
             ..Default::default()
@@ -312,22 +289,7 @@ fn main() {
             .device
             .allocate_memory(&uniform_buffer_allocate_info, None)
             .unwrap();
-        let uniform_ptr = base
-            .device
-            .map_memory(
-                uniform_buffer_memory,
-                0,
-                uniform_buffer_memory_req.size,
-                vk::MemoryMapFlags::empty(),
-            )
-            .unwrap();
-        let mut uniform_aligned_slice = Align::new(
-            uniform_ptr,
-            align_of::<Vec4>() as u64,
-            uniform_buffer_memory_req.size,
-        );
-        uniform_aligned_slice.copy_from_slice(&[uniform_buffer_data]);
-        base.device.unmap_memory(uniform_buffer_memory);
+
         base.device
             .bind_buffer_memory(uniform_buffer, uniform_buffer_memory, 0)
             .unwrap();
@@ -553,16 +515,17 @@ fn main() {
             .unwrap();
         let desc_layout_bindings = [
             vk::DescriptorSetLayoutBinding {
+                binding: 0,
                 descriptor_type: vk::DescriptorType::UNIFORM_BUFFER,
                 descriptor_count: 1,
-                stage_flags: vk::ShaderStageFlags::FRAGMENT,
+                stage_flags: vk::ShaderStageFlags::FRAGMENT | vk::ShaderStageFlags::VERTEX,
                 ..Default::default()
             },
             vk::DescriptorSetLayoutBinding {
                 binding: 1,
                 descriptor_type: vk::DescriptorType::COMBINED_IMAGE_SAMPLER,
                 descriptor_count: 1,
-                stage_flags: vk::ShaderStageFlags::FRAGMENT,
+                stage_flags: vk::ShaderStageFlags::FRAGMENT | vk::ShaderStageFlags::VERTEX,
                 ..Default::default()
             },
         ];
@@ -585,7 +548,7 @@ fn main() {
         let uniform_buffer_descriptor = vk::DescriptorBufferInfo {
             buffer: uniform_buffer,
             offset: 0,
-            range: mem::size_of_val(&uniform_buffer_data) as u64,
+            range: mem::size_of::<Uniforms>() as u64,
         };
 
         let tex_descriptor = vk::DescriptorImageInfo {
@@ -701,6 +664,7 @@ fn main() {
             .viewports(&viewports);
 
         let rasterization_info = vk::PipelineRasterizationStateCreateInfo {
+            cull_mode: vk::CullModeFlags::FRONT,
             front_face: vk::FrontFace::COUNTER_CLOCKWISE,
             line_width: 1.0,
             polygon_mode: vk::PolygonMode::FILL,
@@ -784,6 +748,105 @@ fn main() {
                         vk::Fence::null(),
                     )
                     .unwrap();
+
+
+                let color = Vec4 {
+                    x: 0.3,
+                    y: 0.6,
+                    z: 0.9,
+                    w: 0.0,
+                };
+
+                let model_to_world = mul(
+                        rot_y_axis(frame as f32 * 0.001),                            
+                        translate(Vec3 {
+                            x: 0.0,// - 2.0 * (frame as f32 * 0.01).cos(),
+                            y: 0.0,// + 3.0 * (frame as f32 * 0.01).sin(),
+                            z: 0.0,
+                        }));
+                let model_to_world = mul(
+                    model_to_world,
+                    view(
+                        Vec3 {
+                            x: 2.0,// + 3.0 * (frame as f32 * 0.001).sin(),
+                            y: 3.0,// + 3.0 * (frame as f32 * 0.001).sin(),
+                            z: -5.0,// + 3.0 * (frame as f32 * 0.001).sin(),
+                        },
+                        Vec3 {                            
+                            x: 0.0,
+                            y: 0.0,
+                            z: 5.0,
+                        },
+                        Vec3 {
+                            x: 0.0,
+                            y: 1.0,
+                            z: 0.0,
+                        },
+                    ));
+                let model_to_world = mul(
+                    model_to_world,
+                    projection(
+                        std::f32::consts::PI / 2.0,
+                        window_width as f32 / window_height as f32,
+                        0.1,
+                        1000.0,
+                    ));
+
+                /*
+                mul(
+                    view(
+                        Vec3 {
+                            x: 0.0,
+                            y: 2.0,
+                            z: -5.0,
+                        },
+                        Vec3 {
+                            x: 0.0,
+                            y: 0.0,
+                            z: 1.0,
+                        },
+                        Vec3 {
+                            x: 1.0,
+                            y: 0.0,
+                            z: 0.0,
+                        },
+                        Vec3 {
+                            x: 0.0,
+                            y: 1.0,
+                            z: 0.0,
+                        },
+                    ),
+                    projection(
+                        std::f32::consts::PI / 2.0,
+                        window_width as f32 / window_height as f32,
+                        0.1,
+                        1000.0,
+                    ),
+                )
+                */
+
+                let uniform_buffer_data = Uniforms {
+                    color,
+                    model_to_world
+                };
+
+                let uniform_ptr = base
+                    .device
+                    .map_memory(
+                        uniform_buffer_memory,
+                        0,
+                        uniform_buffer_memory_req.size,
+                        vk::MemoryMapFlags::empty(),
+                    )
+                    .unwrap();
+                let mut uniform_aligned_slice = Align::new(
+                    uniform_ptr,
+                    align_of::<Vec4>() as u64,
+                    uniform_buffer_memory_req.size,
+                );
+                uniform_aligned_slice.copy_from_slice(&[uniform_buffer_data]);
+                base.device.unmap_memory(uniform_buffer_memory);
+
                 let clear_values = [
                     vk::ClearValue {
                         color: vk::ClearColorValue {

@@ -5,7 +5,7 @@
 layout (binding = 1) uniform sampler2D samplerColor;
 
 layout (binding = 0) uniform UBO{
-    mat4 WVP;
+    mat4 model_to_world;
     vec4 color;
 } ubo;
 
@@ -14,5 +14,5 @@ layout (location = 0) out vec4 uFragColor;
 
 void main() {
     vec4 color = texture(samplerColor, o_uv);
-    uFragColor = color * ubo.color;
+    uFragColor = color + ubo.color;
 }
