@@ -3,7 +3,7 @@
 #extension GL_ARB_shading_language_420pack : enable
 
 layout (binding = 0) uniform UBO{
-    mat4 model_to_world;
+    mat4 model_to_screen;
     vec4 color;
 } ubo;
 
@@ -13,5 +13,5 @@ layout (location = 1) in vec2 uv;
 layout (location = 0) out vec2 o_uv;
 void main() {
     o_uv = uv;
-    gl_Position = ubo.model_to_world * pos;
+    gl_Position = ubo.model_to_screen * pos;
 }

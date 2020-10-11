@@ -5,7 +5,7 @@
 layout (binding = 1) uniform sampler2D samplerColor;
 
 layout (binding = 0) uniform UBO{
-    mat4 model_to_world;
+    mat4 model_to_screen;
     vec4 color;
 } ubo;
 

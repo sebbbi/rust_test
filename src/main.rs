@@ -258,7 +258,7 @@ fn main() {
 
         #[derive(Clone, Debug, Copy)]
         struct Uniforms {
-            model_to_world: Mat4x4,
+            model_to_screen: Mat4x4,
             color: Vec4,
         }
 
@@ -664,7 +664,7 @@ fn main() {
             .viewports(&viewports);
 
         let rasterization_info = vk::PipelineRasterizationStateCreateInfo {
-            cull_mode: vk::CullModeFlags::FRONT,
+            cull_mode: vk::CullModeFlags::BACK,
             front_face: vk::FrontFace::COUNTER_CLOCKWISE,
             line_width: 1.0,
             polygon_mode: vk::PolygonMode::FILL,
@@ -764,7 +764,7 @@ fn main() {
                             y: 0.0,// + 3.0 * (frame as f32 * 0.01).sin(),
                             z: 0.0,
                         }));
-                let model_to_world = mul(
+                let model_to_view = mul(
                     model_to_world,
                     view(
                         Vec3 {
@@ -783,8 +783,8 @@ fn main() {
                             z: 0.0,
                         },
                     ));
-                let model_to_world = mul(
-                    model_to_world,
+                let model_to_screen = mul(
+                    model_to_view,
                     projection(
                         std::f32::consts::PI / 2.0,
                         window_width as f32 / window_height as f32,
@@ -792,42 +792,9 @@ fn main() {
                         1000.0,
                     ));
 
-                /*
-                mul(
-                    view(
-                        Vec3 {
-                            x: 0.0,
-                            y: 2.0,
-                            z: -5.0,
-                        },
-                        Vec3 {
-                            x: 0.0,
-                            y: 0.0,
-                            z: 1.0,
-                        },
-                        Vec3 {
-                            x: 1.0,
-                            y: 0.0,
-                            z: 0.0,
-                        },
-                        Vec3 {
-                            x: 0.0,
-                            y: 1.0,
-                            z: 0.0,
-                        },
-                    ),
-                    projection(
-                        std::f32::consts::PI / 2.0,
-                        window_width as f32 / window_height as f32,
-                        0.1,
-                        1000.0,
-                    ),
-                )
-                */
-
                 let uniform_buffer_data = Uniforms {
                     color,
-                    model_to_world
+                    model_to_screen
                 };
 
                 let uniform_ptr = base
