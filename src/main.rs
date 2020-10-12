@@ -117,18 +117,9 @@ fn main() {
             })
             .collect();
         let index_buffer_data = [
-            0u32, 2, 1, 
-            2, 3, 1,
-            2, 6, 3,
-            6, 7, 3,
-            7, 1, 3,
-            7, 5, 1,
-            5, 4, 1,
-            1, 4, 0,
-            0, 4, 6,
-            0, 6, 2,
-            6, 5, 7,
-            6, 4, 5];
+            0u32, 2, 1, 2, 3, 1, 2, 6, 3, 6, 7, 3, 7, 1, 3, 7, 5, 1, 5, 4, 1, 1, 4, 0, 0, 4, 6, 0,
+            6, 2, 6, 5, 7, 6, 4, 5,
+        ];
         let index_buffer_info = vk::BufferCreateInfo {
             size: std::mem::size_of_val(&index_buffer_data) as u64,
             usage: vk::BufferUsageFlags::INDEX_BUFFER,
@@ -734,6 +725,20 @@ fn main() {
         let graphic_pipeline = graphics_pipelines[0];
 
         {
+            struct Application {
+                is_left_clicked: bool,
+                cursor_position: (i32, i32),
+                cursor_delta: Option<(i32, i32)>,
+                wheel_delta: Option<f32>,
+            };
+
+            let mut app = Application {
+                is_left_clicked: false,
+                cursor_position: (0, 0),
+                cursor_delta: None,
+                wheel_delta: None,
+            };
+
             let mut time_start = Instant::now();
             let mut frame = 0u32;
             let mut active_command_buffer = 0;
@@ -749,7 +754,6 @@ fn main() {
                     )
                     .unwrap();
 
-
                 let color = Vec4 {
                     x: 0.3,
                     y: 0.6,
@@ -758,21 +762,22 @@ fn main() {
                 };
 
                 let model_to_world = mul(
-                        rot_y_axis(frame as f32 * 0.001),                            
-                        translate(Vec3 {
-                            x: 0.0,// - 2.0 * (frame as f32 * 0.01).cos(),
-                            y: 0.0,// + 3.0 * (frame as f32 * 0.01).sin(),
-                            z: 0.0,
-                        }));
+                    rot_y_axis(frame as f32 * 0.001),
+                    translate(Vec3 {
+                        x: 0.0, // - 2.0 * (frame as f32 * 0.01).cos(),
+                        y: 0.0, // + 3.0 * (frame as f32 * 0.01).sin(),
+                        z: 0.0,
+                    }),
+                );
                 let model_to_view = mul(
                     model_to_world,
                     view(
                         Vec3 {
-                            x: 2.0,// + 3.0 * (frame as f32 * 0.001).sin(),
-                            y: 3.0,// + 3.0 * (frame as f32 * 0.001).sin(),
-                            z: -5.0,// + 3.0 * (frame as f32 * 0.001).sin(),
+                            x: 2.0,  // + 3.0 * (frame as f32 * 0.001).sin(),
+                            y: 3.0,  // + 3.0 * (frame as f32 * 0.001).sin(),
+                            z: -5.0, // + 3.0 * (frame as f32 * 0.001).sin(),
                         },
-                        Vec3 {                            
+                        Vec3 {
                             x: 0.0,
                             y: 0.0,
                             z: 5.0,
@@ -782,7 +787,8 @@ fn main() {
                             y: 1.0,
                             z: 0.0,
                         },
-                    ));
+                    ),
+                );
                 let model_to_screen = mul(
                     model_to_view,
                     projection(
@@ -790,11 +796,12 @@ fn main() {
                         window_width as f32 / window_height as f32,
                         0.1,
                         1000.0,
-                    ));
+                    ),
+                );
 
                 let uniform_buffer_data = Uniforms {
                     color,
-                    model_to_screen
+                    model_to_screen,
                 };
 
                 let uniform_ptr = base
@@ -914,30 +921,10 @@ fn main() {
                 }
             };
 
-            /*
-                    events_loop.run(|event, _, control_flow| {
-                        *control_flow = ControlFlow::Poll;
-                        render_tick();
-                        match event {
-                            Event::WindowEvent { event, .. } => match event {
-                                WindowEvent::KeyboardInput { input, .. } => {
-                                    if let Some(VirtualKeyCode::Escape) = input.virtual_keycode {
-                                        ControlFlow::Break
-                                    } else {
-                                        ControlFlow::Continue
-                                    }
-                                }
-                                WindowEvent::CloseRequested => ControlFlow::Break,
-                                _ => ControlFlow::Continue,
-                            },
-                            _ => ControlFlow::Continue,
-                        }
-                    });
-            */
             // Used to accumutate input events from the start to the end of a frame
             let mut is_left_clicked = None;
             let mut cursor_position = None;
-            //let mut last_position = app.cursor_position;
+            let mut last_position = app.cursor_position;
             let mut wheel_delta = None;
             let mut dirty_swapchain = false;
 
@@ -952,7 +939,7 @@ fn main() {
                         {
                             is_left_clicked = None;
                             cursor_position = None;
-                            //last_position = app.cursor_position;
+                            last_position = app.cursor_position;
                             wheel_delta = None;
                         }
                     }
@@ -960,18 +947,18 @@ fn main() {
                         // update input state after accumulating event
                         {
                             if let Some(is_left_clicked) = is_left_clicked {
-                                //app.is_left_clicked = is_left_clicked;
+                                app.is_left_clicked = is_left_clicked;
                             }
                             if let Some(position) = cursor_position {
-                                //app.cursor_position = position;
-                                //app.cursor_delta = Some([
-                                //    position[0] - last_position[0],
-                                //    position[1] - last_position[1],
-                                //]);
+                                app.cursor_position = position;
+                                app.cursor_delta = Some((
+                                    position.0 - last_position.0,
+                                    position.1 - last_position.1,
+                                ));
                             } else {
-                                //app.cursor_delta = None;
+                                app.cursor_delta = None;
                             }
-                            //app.wheel_delta = wheel_delta;
+                            app.wheel_delta = wheel_delta;
                         }
 
                         // render
@@ -1007,7 +994,7 @@ fn main() {
                         }
                         WindowEvent::CursorMoved { position, .. } => {
                             let position: (i32, i32) = position.into();
-                            cursor_position = Some([position.0, position.1]);
+                            cursor_position = Some(position);
                         }
                         WindowEvent::MouseWheel {
                             delta: MouseScrollDelta::LineDelta(_, v_lines),

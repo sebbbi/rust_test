@@ -231,7 +231,7 @@ impl VulkanBase {
                 .message_severity(
                     vk::DebugUtilsMessageSeverityFlagsEXT::ERROR
                         | vk::DebugUtilsMessageSeverityFlagsEXT::WARNING,
-                        //| vk::DebugUtilsMessageSeverityFlagsEXT::INFO,
+                    //| vk::DebugUtilsMessageSeverityFlagsEXT::INFO,
                 )
                 .message_type(vk::DebugUtilsMessageTypeFlagsEXT::all())
                 .pfn_user_callback(Some(vulkan_debug_callback));
