@@ -40,6 +40,30 @@ impl Vec3 {
     }
 }
 
+impl ops::Mul<f32> for Vec3 {
+    type Output = Vec3;
+
+    fn mul(self, _rhs: f32) -> Vec3 {
+        Vec3 {
+            x: self.x * _rhs,
+            y: self.y * _rhs,
+            z: self.z * _rhs,
+        }
+    }
+}
+
+impl ops::Mul<Vec3> for Vec3 {
+    type Output = Vec3;
+
+    fn mul(self, _rhs: Vec3) -> Vec3 {
+        Vec3 {
+            x: self.x * _rhs.x,
+            y: self.y * _rhs.y,
+            z: self.z * _rhs.z,
+        }
+    }
+}
+
 impl ops::Add<Vec3> for Vec3 {
     type Output = Vec3;
 
@@ -113,32 +137,96 @@ pub struct Mat4x4 {
     pub r3: Vec4,
 }
 
-pub fn mul(a: Mat4x4, b: Mat4x4) -> Mat4x4 {
-    Mat4x4 {
-        r0: Vec4 {
-            x: a.r0.x * b.r0.x + a.r0.y * b.r1.x + a.r0.z * b.r2.x + a.r0.w * b.r3.x,
-            y: a.r0.x * b.r0.y + a.r0.y * b.r1.y + a.r0.z * b.r2.y + a.r0.w * b.r3.y,
-            z: a.r0.x * b.r0.z + a.r0.y * b.r1.z + a.r0.z * b.r2.z + a.r0.w * b.r3.z,
-            w: a.r0.x * b.r0.w + a.r0.y * b.r1.w + a.r0.z * b.r2.w + a.r0.w * b.r3.w,
-        },
-        r1: Vec4 {
-            x: a.r1.x * b.r0.x + a.r1.y * b.r1.x + a.r1.z * b.r2.x + a.r1.w * b.r3.x,
-            y: a.r1.x * b.r0.y + a.r1.y * b.r1.y + a.r1.z * b.r2.y + a.r1.w * b.r3.y,
-            z: a.r1.x * b.r0.z + a.r1.y * b.r1.z + a.r1.z * b.r2.z + a.r1.w * b.r3.z,
-            w: a.r1.x * b.r0.w + a.r1.y * b.r1.w + a.r1.z * b.r2.w + a.r1.w * b.r3.w,
-        },
-        r2: Vec4 {
-            x: a.r2.x * b.r0.x + a.r2.y * b.r1.x + a.r2.z * b.r2.x + a.r2.w * b.r3.x,
-            y: a.r2.x * b.r0.y + a.r2.y * b.r1.y + a.r2.z * b.r2.y + a.r2.w * b.r3.y,
-            z: a.r2.x * b.r0.z + a.r2.y * b.r1.z + a.r2.z * b.r2.z + a.r2.w * b.r3.z,
-            w: a.r2.x * b.r0.w + a.r2.y * b.r1.w + a.r2.z * b.r2.w + a.r2.w * b.r3.w,
-        },
-        r3: Vec4 {
-            x: a.r3.x * b.r0.x + a.r3.y * b.r1.x + a.r3.z * b.r2.x + a.r3.w * b.r3.x,
-            y: a.r3.x * b.r0.y + a.r3.y * b.r1.y + a.r3.z * b.r2.y + a.r3.w * b.r3.y,
-            z: a.r3.x * b.r0.z + a.r3.y * b.r1.z + a.r3.z * b.r2.z + a.r3.w * b.r3.z,
-            w: a.r3.x * b.r0.w + a.r3.y * b.r1.w + a.r3.z * b.r2.w + a.r3.w * b.r3.w,
-        },
+impl ops::Mul<Mat4x4> for Mat4x4 {
+    type Output = Mat4x4;
+
+    fn mul(self, _rhs: Mat4x4) -> Mat4x4 {
+        Mat4x4 {
+            r0: Vec4 {
+                x: self.r0.x * _rhs.r0.x
+                    + self.r0.y * _rhs.r1.x
+                    + self.r0.z * _rhs.r2.x
+                    + self.r0.w * _rhs.r3.x,
+                y: self.r0.x * _rhs.r0.y
+                    + self.r0.y * _rhs.r1.y
+                    + self.r0.z * _rhs.r2.y
+                    + self.r0.w * _rhs.r3.y,
+                z: self.r0.x * _rhs.r0.z
+                    + self.r0.y * _rhs.r1.z
+                    + self.r0.z * _rhs.r2.z
+                    + self.r0.w * _rhs.r3.z,
+                w: self.r0.x * _rhs.r0.w
+                    + self.r0.y * _rhs.r1.w
+                    + self.r0.z * _rhs.r2.w
+                    + self.r0.w * _rhs.r3.w,
+            },
+            r1: Vec4 {
+                x: self.r1.x * _rhs.r0.x
+                    + self.r1.y * _rhs.r1.x
+                    + self.r1.z * _rhs.r2.x
+                    + self.r1.w * _rhs.r3.x,
+                y: self.r1.x * _rhs.r0.y
+                    + self.r1.y * _rhs.r1.y
+                    + self.r1.z * _rhs.r2.y
+                    + self.r1.w * _rhs.r3.y,
+                z: self.r1.x * _rhs.r0.z
+                    + self.r1.y * _rhs.r1.z
+                    + self.r1.z * _rhs.r2.z
+                    + self.r1.w * _rhs.r3.z,
+                w: self.r1.x * _rhs.r0.w
+                    + self.r1.y * _rhs.r1.w
+                    + self.r1.z * _rhs.r2.w
+                    + self.r1.w * _rhs.r3.w,
+            },
+            r2: Vec4 {
+                x: self.r2.x * _rhs.r0.x
+                    + self.r2.y * _rhs.r1.x
+                    + self.r2.z * _rhs.r2.x
+                    + self.r2.w * _rhs.r3.x,
+                y: self.r2.x * _rhs.r0.y
+                    + self.r2.y * _rhs.r1.y
+                    + self.r2.z * _rhs.r2.y
+                    + self.r2.w * _rhs.r3.y,
+                z: self.r2.x * _rhs.r0.z
+                    + self.r2.y * _rhs.r1.z
+                    + self.r2.z * _rhs.r2.z
+                    + self.r2.w * _rhs.r3.z,
+                w: self.r2.x * _rhs.r0.w
+                    + self.r2.y * _rhs.r1.w
+                    + self.r2.z * _rhs.r2.w
+                    + self.r2.w * _rhs.r3.w,
+            },
+            r3: Vec4 {
+                x: self.r3.x * _rhs.r0.x
+                    + self.r3.y * _rhs.r1.x
+                    + self.r3.z * _rhs.r2.x
+                    + self.r3.w * _rhs.r3.x,
+                y: self.r3.x * _rhs.r0.y
+                    + self.r3.y * _rhs.r1.y
+                    + self.r3.z * _rhs.r2.y
+                    + self.r3.w * _rhs.r3.y,
+                z: self.r3.x * _rhs.r0.z
+                    + self.r3.y * _rhs.r1.z
+                    + self.r3.z * _rhs.r2.z
+                    + self.r3.w * _rhs.r3.z,
+                w: self.r3.x * _rhs.r0.w
+                    + self.r3.y * _rhs.r1.w
+                    + self.r3.z * _rhs.r2.w
+                    + self.r3.w * _rhs.r3.w,
+            },
+        }
+    }
+}
+
+impl ops::Mul<Mat4x4> for Vec3 {
+    type Output = Vec3;
+
+    fn mul(self, _rhs: Mat4x4) -> Vec3 {
+        Vec3 {
+            x: self.x * _rhs.r0.x + self.y * _rhs.r1.x + self.z * _rhs.r2.x + _rhs.r3.x,
+            y: self.x * _rhs.r0.y + self.y * _rhs.r1.y + self.z * _rhs.r2.y + _rhs.r3.y,
+            z: self.x * _rhs.r0.z + self.y * _rhs.r1.z + self.z * _rhs.r2.z + _rhs.r3.z,
+        }
     }
 }
 

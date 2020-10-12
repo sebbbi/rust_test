@@ -739,187 +739,27 @@ fn main() {
                 wheel_delta: None,
             };
 
+            struct Camera {
+                position: Vec3,
+                direction: Vec3,
+            };
+
+            let mut camera = Camera {
+                position: Vec3 {
+                    x: 0.0,
+                    y: 2.0,
+                    z: 5.0,
+                },
+                direction: Vec3 {
+                    x: 0.0,
+                    y: -0.5,
+                    z: -1.0,
+                },
+            };
+
             let mut time_start = Instant::now();
             let mut frame = 0u32;
             let mut active_command_buffer = 0;
-
-            let mut render_tick = || {
-                let (present_index, _) = base
-                    .swapchain_loader
-                    .acquire_next_image(
-                        base.swapchain,
-                        std::u64::MAX,
-                        base.present_complete_semaphore,
-                        vk::Fence::null(),
-                    )
-                    .unwrap();
-
-                let color = Vec4 {
-                    x: 0.3,
-                    y: 0.6,
-                    z: 0.9,
-                    w: 0.0,
-                };
-
-                let model_to_world = mul(
-                    rot_y_axis(frame as f32 * 0.001),
-                    translate(Vec3 {
-                        x: 0.0, // - 2.0 * (frame as f32 * 0.01).cos(),
-                        y: 0.0, // + 3.0 * (frame as f32 * 0.01).sin(),
-                        z: 0.0,
-                    }),
-                );
-                let model_to_view = mul(
-                    model_to_world,
-                    view(
-                        Vec3 {
-                            x: 2.0,  // + 3.0 * (frame as f32 * 0.001).sin(),
-                            y: 3.0,  // + 3.0 * (frame as f32 * 0.001).sin(),
-                            z: -5.0, // + 3.0 * (frame as f32 * 0.001).sin(),
-                        },
-                        Vec3 {
-                            x: 0.0,
-                            y: 0.0,
-                            z: 5.0,
-                        },
-                        Vec3 {
-                            x: 0.0,
-                            y: 1.0,
-                            z: 0.0,
-                        },
-                    ),
-                );
-                let model_to_screen = mul(
-                    model_to_view,
-                    projection(
-                        std::f32::consts::PI / 2.0,
-                        window_width as f32 / window_height as f32,
-                        0.1,
-                        1000.0,
-                    ),
-                );
-
-                let uniform_buffer_data = Uniforms {
-                    color,
-                    model_to_screen,
-                };
-
-                let uniform_ptr = base
-                    .device
-                    .map_memory(
-                        uniform_buffer_memory,
-                        0,
-                        uniform_buffer_memory_req.size,
-                        vk::MemoryMapFlags::empty(),
-                    )
-                    .unwrap();
-                let mut uniform_aligned_slice = Align::new(
-                    uniform_ptr,
-                    align_of::<Vec4>() as u64,
-                    uniform_buffer_memory_req.size,
-                );
-                uniform_aligned_slice.copy_from_slice(&[uniform_buffer_data]);
-                base.device.unmap_memory(uniform_buffer_memory);
-
-                let clear_values = [
-                    vk::ClearValue {
-                        color: vk::ClearColorValue {
-                            float32: [0.0, 0.0, 0.0, 0.0],
-                        },
-                    },
-                    vk::ClearValue {
-                        depth_stencil: vk::ClearDepthStencilValue {
-                            depth: 1.0,
-                            stencil: 0,
-                        },
-                    },
-                ];
-
-                let render_pass_begin_info = vk::RenderPassBeginInfo::builder()
-                    .render_pass(renderpass)
-                    .framebuffer(framebuffers[present_index as usize])
-                    .render_area(vk::Rect2D {
-                        offset: vk::Offset2D { x: 0, y: 0 },
-                        extent: base.surface_resolution,
-                    })
-                    .clear_values(&clear_values);
-
-                active_command_buffer = base.record_submit_commandbuffer(
-                    active_command_buffer,
-                    base.present_queue,
-                    &[vk::PipelineStageFlags::BOTTOM_OF_PIPE],
-                    &[base.present_complete_semaphore],
-                    &[base.rendering_complete_semaphore],
-                    |device, draw_command_buffer| {
-                        device.cmd_begin_render_pass(
-                            draw_command_buffer,
-                            &render_pass_begin_info,
-                            vk::SubpassContents::INLINE,
-                        );
-                        device.cmd_bind_descriptor_sets(
-                            draw_command_buffer,
-                            vk::PipelineBindPoint::GRAPHICS,
-                            pipeline_layout,
-                            0,
-                            &descriptor_sets[..],
-                            &[],
-                        );
-                        device.cmd_bind_pipeline(
-                            draw_command_buffer,
-                            vk::PipelineBindPoint::GRAPHICS,
-                            graphic_pipeline,
-                        );
-                        device.cmd_set_viewport(draw_command_buffer, 0, &viewports);
-                        device.cmd_set_scissor(draw_command_buffer, 0, &scissors);
-                        device.cmd_bind_vertex_buffers(
-                            draw_command_buffer,
-                            0,
-                            &[vertex_input_buffer],
-                            &[0],
-                        );
-                        device.cmd_bind_index_buffer(
-                            draw_command_buffer,
-                            index_buffer,
-                            0,
-                            vk::IndexType::UINT32,
-                        );
-                        device.cmd_draw_indexed(
-                            draw_command_buffer,
-                            index_buffer_data.len() as u32,
-                            1,
-                            0,
-                            0,
-                            1,
-                        );
-                        // Or draw without the index buffer
-                        // device.cmd_draw(draw_command_buffer, 3, 1, 0, 0);
-                        device.cmd_end_render_pass(draw_command_buffer);
-                    },
-                );
-
-                //let mut present_info_err = mem::zeroed();
-                let present_info = vk::PresentInfoKHR {
-                    wait_semaphore_count: 1,
-                    p_wait_semaphores: &base.rendering_complete_semaphore,
-                    swapchain_count: 1,
-                    p_swapchains: &base.swapchain,
-                    p_image_indices: &present_index,
-                    ..Default::default()
-                };
-
-                base.swapchain_loader
-                    .queue_present(base.present_queue, &present_info)
-                    .unwrap();
-
-                frame += 1;
-                if (frame % 60) == 0 {
-                    let time_now = Instant::now();
-                    let interval = (time_now - time_start).as_millis();
-                    println!("Avg frame time: {}", interval as f32 / 60.0f32);
-
-                    time_start = time_now;
-                }
-            };
 
             // Used to accumutate input events from the start to the end of a frame
             let mut is_left_clicked = None;
@@ -974,7 +814,180 @@ fn main() {
                                 }
                             }
                             dirty_swapchain = app.draw_frame();*/
-                            render_tick();
+
+                            let (present_index, _) = base
+                                .swapchain_loader
+                                .acquire_next_image(
+                                    base.swapchain,
+                                    std::u64::MAX,
+                                    base.present_complete_semaphore,
+                                    vk::Fence::null(),
+                                )
+                                .unwrap();
+
+                            if let Some(delta) = app.wheel_delta {
+                                camera.position = camera.position + camera.direction * delta;
+                            }
+                            if app.is_left_clicked {
+                                if let Some(delta) = app.cursor_delta {
+                                    let rot = rot_x_axis(delta.1 as f32 * -0.001)
+                                        * rot_y_axis(delta.0 as f32 * 0.001);
+                                    camera.direction = camera.direction * rot;
+                                    camera.direction = camera.direction.normalize();
+                                }
+                            }
+
+                            let color = Vec4 {
+                                x: 0.3,
+                                y: 0.6,
+                                z: 0.9,
+                                w: 0.0,
+                            };
+
+                            let model_to_world = rot_y_axis(frame as f32 * 0.001)
+                                * translate(Vec3 {
+                                    x: 0.0, // - 2.0 * (frame as f32 * 0.01).cos(),
+                                    y: 0.0, // + 3.0 * (frame as f32 * 0.01).sin(),
+                                    z: 0.0,
+                                });
+                            let model_to_view = model_to_world
+                                * view(
+                                    camera.position,
+                                    camera.direction,
+                                    Vec3 {
+                                        x: 0.0,
+                                        y: 1.0,
+                                        z: 0.0,
+                                    },
+                                );
+                            let model_to_screen = model_to_view
+                                * projection(
+                                    std::f32::consts::PI / 2.0,
+                                    window_width as f32 / window_height as f32,
+                                    0.1,
+                                    1000.0,
+                                );
+
+                            let uniform_buffer_data = Uniforms {
+                                color,
+                                model_to_screen,
+                            };
+
+                            let uniform_ptr = base
+                                .device
+                                .map_memory(
+                                    uniform_buffer_memory,
+                                    0,
+                                    uniform_buffer_memory_req.size,
+                                    vk::MemoryMapFlags::empty(),
+                                )
+                                .unwrap();
+                            let mut uniform_aligned_slice = Align::new(
+                                uniform_ptr,
+                                align_of::<Vec4>() as u64,
+                                uniform_buffer_memory_req.size,
+                            );
+                            uniform_aligned_slice.copy_from_slice(&[uniform_buffer_data]);
+                            base.device.unmap_memory(uniform_buffer_memory);
+
+                            let clear_values = [
+                                vk::ClearValue {
+                                    color: vk::ClearColorValue {
+                                        float32: [0.0, 0.0, 0.0, 0.0],
+                                    },
+                                },
+                                vk::ClearValue {
+                                    depth_stencil: vk::ClearDepthStencilValue {
+                                        depth: 1.0,
+                                        stencil: 0,
+                                    },
+                                },
+                            ];
+
+                            let render_pass_begin_info = vk::RenderPassBeginInfo::builder()
+                                .render_pass(renderpass)
+                                .framebuffer(framebuffers[present_index as usize])
+                                .render_area(vk::Rect2D {
+                                    offset: vk::Offset2D { x: 0, y: 0 },
+                                    extent: base.surface_resolution,
+                                })
+                                .clear_values(&clear_values);
+
+                            active_command_buffer = base.record_submit_commandbuffer(
+                                active_command_buffer,
+                                base.present_queue,
+                                &[vk::PipelineStageFlags::BOTTOM_OF_PIPE],
+                                &[base.present_complete_semaphore],
+                                &[base.rendering_complete_semaphore],
+                                |device, draw_command_buffer| {
+                                    device.cmd_begin_render_pass(
+                                        draw_command_buffer,
+                                        &render_pass_begin_info,
+                                        vk::SubpassContents::INLINE,
+                                    );
+                                    device.cmd_bind_descriptor_sets(
+                                        draw_command_buffer,
+                                        vk::PipelineBindPoint::GRAPHICS,
+                                        pipeline_layout,
+                                        0,
+                                        &descriptor_sets[..],
+                                        &[],
+                                    );
+                                    device.cmd_bind_pipeline(
+                                        draw_command_buffer,
+                                        vk::PipelineBindPoint::GRAPHICS,
+                                        graphic_pipeline,
+                                    );
+                                    device.cmd_set_viewport(draw_command_buffer, 0, &viewports);
+                                    device.cmd_set_scissor(draw_command_buffer, 0, &scissors);
+                                    device.cmd_bind_vertex_buffers(
+                                        draw_command_buffer,
+                                        0,
+                                        &[vertex_input_buffer],
+                                        &[0],
+                                    );
+                                    device.cmd_bind_index_buffer(
+                                        draw_command_buffer,
+                                        index_buffer,
+                                        0,
+                                        vk::IndexType::UINT32,
+                                    );
+                                    device.cmd_draw_indexed(
+                                        draw_command_buffer,
+                                        index_buffer_data.len() as u32,
+                                        1,
+                                        0,
+                                        0,
+                                        1,
+                                    );
+                                    // Or draw without the index buffer
+                                    // device.cmd_draw(draw_command_buffer, 3, 1, 0, 0);
+                                    device.cmd_end_render_pass(draw_command_buffer);
+                                },
+                            );
+
+                            //let mut present_info_err = mem::zeroed();
+                            let present_info = vk::PresentInfoKHR {
+                                wait_semaphore_count: 1,
+                                p_wait_semaphores: &base.rendering_complete_semaphore,
+                                swapchain_count: 1,
+                                p_swapchains: &base.swapchain,
+                                p_image_indices: &present_index,
+                                ..Default::default()
+                            };
+
+                            base.swapchain_loader
+                                .queue_present(base.present_queue, &present_info)
+                                .unwrap();
+
+                            frame += 1;
+                            if (frame % 60) == 0 {
+                                let time_now = Instant::now();
+                                let interval = (time_now - time_start).as_millis();
+                                println!("Avg frame time: {}", interval as f32 / 60.0f32);
+
+                                time_start = time_now;
+                            }
                         }
                     }
                     Event::WindowEvent { event, .. } => match event {
