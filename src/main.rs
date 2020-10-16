@@ -17,6 +17,9 @@ use winit::{
     window::WindowBuilder,
 };
 
+mod sdf;
+use sdf::*;
+
 mod vulkan_base;
 use vulkan_base::*;
 
@@ -33,6 +36,8 @@ pub struct App {}
 
 fn main() {
     unsafe {
+        load_sdf("data/ganymede-and-jupiter.sdf");
+
         let window_width = 1280;
         let window_height = 720;
 
