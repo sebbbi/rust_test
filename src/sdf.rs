@@ -13,7 +13,7 @@ pub struct SdfHeader {
 
 pub struct Sdf {
     pub header: SdfHeader,
-    pub voxels: Vec<f32>,
+    pub voxels: Vec<u16>,
 }
 
 struct Loader {
@@ -23,6 +23,12 @@ struct Loader {
 impl Loader {
     pub fn new() -> Loader {
         Loader { offset: 0 }
+    }
+
+    pub fn load_u16(&mut self, bytes: &[u8]) -> u16 {
+        let out = u16::from_le_bytes(bytes[self.offset..self.offset + 2].try_into().unwrap());
+        self.offset += 2;
+        out
     }
 
     pub fn load_u32(&mut self, bytes: &[u8]) -> u32 {
@@ -35,6 +41,17 @@ impl Loader {
         let out = f32::from_le_bytes(bytes[self.offset..self.offset + 4].try_into().unwrap());
         self.offset += 4;
         out
+    }
+
+    pub fn load_array_u16(&mut self, bytes: &[u8], count: usize) -> Vec<u16> {
+    (0..count)
+        .map(|_| {
+            let out =
+                u16::from_le_bytes(bytes[self.offset..self.offset + 2].try_into().unwrap());
+            self.offset += 2;
+            out
+        })
+        .collect()
     }
 
     pub fn load_array_f32(&mut self, bytes: &[u8], count: usize) -> Vec<f32> {
@@ -68,7 +85,7 @@ pub fn load_sdf(filename: &str) -> io::Result<Sdf> {
     };
 
     let count_voxels = header.dim.0 * header.dim.1 * header.dim.2;
-    let voxels = loader.load_array_f32(&bytes, count_voxels as usize);
+    let voxels = loader.load_array_u16(&bytes, count_voxels as usize);
 
     println!("Header {:?}", header);
     println!("Voxels {:?}", voxels[0]);
