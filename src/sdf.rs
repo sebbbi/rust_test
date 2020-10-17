@@ -5,12 +5,15 @@ use std::io::prelude::*;
 use std::io::Read;
 
 #[derive(Clone, Debug, Copy)]
-struct SdfHeader {
-    i: i32,
-    j: i32,
-    k: i32,
-    box_min: [f32; 3],
-    dx: f32,
+pub struct SdfHeader {
+    pub dim: (u32, u32, u32),
+    pub box_min: (f32, f32, f32),
+    pub dx: f32,
+}
+
+pub struct Sdf {
+    pub header: SdfHeader,
+    pub voxels: Vec<f32>,
 }
 
 struct Loader {
@@ -22,8 +25,8 @@ impl Loader {
         Loader { offset: 0 }
     }
 
-    pub fn load_i32(&mut self, bytes: &[u8]) -> i32 {
-        let out = i32::from_le_bytes(bytes[self.offset..self.offset + 4].try_into().unwrap());
+    pub fn load_u32(&mut self, bytes: &[u8]) -> u32 {
+        let out = u32::from_le_bytes(bytes[self.offset..self.offset + 4].try_into().unwrap());
         self.offset += 4;
         out
     }
@@ -46,28 +49,34 @@ impl Loader {
     }
 }
 
-pub fn load_sdf(filename: &str) -> io::Result<()> {
+pub fn load_sdf(filename: &str) -> io::Result<Sdf> {
     let bytes = std::fs::read(filename)?;
 
     let mut loader = Loader::new();
     let header = SdfHeader {
-        i: loader.load_i32(&bytes),
-        j: loader.load_i32(&bytes),
-        k: loader.load_i32(&bytes),
-        box_min: [
+        dim: (
+            loader.load_u32(&bytes),
+            loader.load_u32(&bytes),
+            loader.load_u32(&bytes),
+        ),
+        box_min: (
             loader.load_f32(&bytes),
             loader.load_f32(&bytes),
             loader.load_f32(&bytes),
-        ],
+        ),
         dx: loader.load_f32(&bytes),
     };
 
-    let count_voxels = header.i * header.j * header.k;
+    let count_voxels = header.dim.0 * header.dim.1 * header.dim.2;
     let voxels = loader.load_array_f32(&bytes, count_voxels as usize);
 
     println!("Header {:?}", header);
-
     println!("Voxels {:?}", voxels[0]);
 
-    Ok(())
+    let sdf = Sdf {
+        header,
+        voxels,
+	};
+
+    Ok(sdf)
 }

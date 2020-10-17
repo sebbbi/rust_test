@@ -11,7 +11,10 @@ layout (location = 0) in vec4 pos;
 layout (location = 1) in vec2 uv;
 
 layout (location = 0) out vec2 o_uv;
+layout (location = 1) out vec3 o_pos;
+
 void main() {
     o_uv = uv;
+    o_pos = pos.xyz;
     gl_Position = ubo.model_to_screen * pos;
 }

@@ -36,7 +36,7 @@ pub struct App {}
 
 fn main() {
     unsafe {
-        load_sdf("data/ganymede-and-jupiter.sdf");
+        let sdf = load_sdf("data/ganymede-and-jupiter.sdf").expect("SDF loading failed");
 
         let window_width = 1280;
         let window_height = 720;
@@ -290,13 +290,10 @@ fn main() {
             .bind_buffer_memory(uniform_buffer, uniform_buffer_memory, 0)
             .unwrap();
 
-        let image = image::load_from_memory(include_bytes!("../assets/rust.png"))
-            .unwrap()
-            .to_rgba();
-        let image_dimensions = image.dimensions();
-        let image_data = image.into_raw();
+        let image_dimensions = sdf.header.dim;
+        let image_data = sdf.voxels;
         let image_buffer_info = vk::BufferCreateInfo {
-            size: (std::mem::size_of::<u8>() * image_data.len()) as u64,
+            size: (std::mem::size_of::<f32>() * image_data.len()) as u64,
             usage: vk::BufferUsageFlags::TRANSFER_SRC,
             sharing_mode: vk::SharingMode::EXCLUSIVE,
             ..Default::default()
@@ -340,12 +337,12 @@ fn main() {
             .unwrap();
 
         let texture_create_info = vk::ImageCreateInfo {
-            image_type: vk::ImageType::TYPE_2D,
-            format: vk::Format::R8G8B8A8_UNORM,
+            image_type: vk::ImageType::TYPE_3D,
+            format: vk::Format::R32_SFLOAT,
             extent: vk::Extent3D {
                 width: image_dimensions.0,
                 height: image_dimensions.1,
-                depth: 1,
+                depth: image_dimensions.2,
             },
             mip_levels: 1,
             array_layers: 1,
@@ -418,7 +415,7 @@ fn main() {
                     .image_extent(vk::Extent3D {
                         width: image_dimensions.0,
                         height: image_dimensions.1,
-                        depth: 1,
+                        depth: image_dimensions.2,
                     });
 
                 device.cmd_copy_buffer_to_image(
@@ -470,7 +467,7 @@ fn main() {
         let sampler = base.device.create_sampler(&sampler_info, None).unwrap();
 
         let tex_image_view_info = vk::ImageViewCreateInfo {
-            view_type: vk::ImageViewType::TYPE_2D,
+            view_type: vk::ImageViewType::TYPE_3D,
             format: texture_create_info.format,
             components: vk::ComponentMapping {
                 r: vk::ComponentSwizzle::R,
