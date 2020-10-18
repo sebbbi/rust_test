@@ -48,9 +48,7 @@ fn main() {
         };
 
         let center_to_edge = diagonal * 0.5;
-
         let diagonal_length = diagonal.length();
-
         let volume_scale = Vec3::from_scalar(diagonal_length) / diagonal;
 
         /*
@@ -306,6 +304,7 @@ fn main() {
         #[derive(Clone, Debug, Copy)]
         struct Uniforms {
             model_to_world: Mat4x4,
+            world_to_model: Mat4x4,
             model_to_screen: Mat4x4,
             color: Vec4,
             camera_position: Vec4,
@@ -804,7 +803,7 @@ fn main() {
             let mut camera = Camera {
                 position: Vec3 {
                     x: 0.0,
-                    y: 40.0,
+                    y: 50.0,
                     z: 100.0,
                 },
                 direction: Vec3 {
@@ -883,7 +882,7 @@ fn main() {
                                 .unwrap();
 
                             if let Some(delta) = app.wheel_delta {
-                                camera.position = camera.position + camera.direction * delta;
+                                camera.position = camera.position + camera.direction * delta * 5.0;
                             }
                             if app.is_left_clicked {
                                 if let Some(delta) = app.cursor_delta {
@@ -901,12 +900,14 @@ fn main() {
                                 w: 0.0,
                             };
 
-                            let model_to_world = rot_y_axis(frame as f32 * 0.001)
+                            let model_to_world = rot_x_axis(-std::f32::consts::PI / 2.0) // Model from Z-up to Y-up
+                                * rot_y_axis(frame as f32 * 0.001)
                                 * translate(Vec3 {
                                     x: 0.0, // - 2.0 * (frame as f32 * 0.01).cos(),
                                     y: 0.0, // + 3.0 * (frame as f32 * 0.01).sin(),
                                     z: 0.0,
                                 });
+
                             let model_to_view = model_to_world
                                 * view(
                                     camera.position,
@@ -917,6 +918,7 @@ fn main() {
                                         z: 0.0,
                                     },
                                 );
+
                             let model_to_screen = model_to_view
                                 * projection(
                                     std::f32::consts::PI / 2.0,
@@ -925,8 +927,11 @@ fn main() {
                                     1000.0,
                                 );
 
+                            let world_to_model = inverse(model_to_world);
+
                             let uniform_buffer_data = Uniforms {
                                 model_to_world,
+                                world_to_model,
                                 model_to_screen,
                                 color,
                                 camera_position: camera.position.to_4d(),

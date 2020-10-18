@@ -280,6 +280,60 @@ pub fn identity() -> Mat4x4 {
     }
 }
 
+pub fn inverse(m: Mat4x4) -> Mat4x4 {
+    let a2323 = m.r2.z * m.r3.w - m.r2.w * m.r3.z;
+    let a1323 = m.r2.y * m.r3.w - m.r2.w * m.r3.y;
+    let a1223 = m.r2.y * m.r3.z - m.r2.z * m.r3.y;
+    let a0323 = m.r2.x * m.r3.w - m.r2.w * m.r3.x;
+    let a0223 = m.r2.x * m.r3.z - m.r2.z * m.r3.x;
+    let a0123 = m.r2.x * m.r3.y - m.r2.y * m.r3.x;
+    let a2313 = m.r1.z * m.r3.w - m.r1.w * m.r3.z;
+    let a1313 = m.r1.y * m.r3.w - m.r1.w * m.r3.y;
+    let a1213 = m.r1.y * m.r3.z - m.r1.z * m.r3.y;
+    let a2312 = m.r1.z * m.r2.w - m.r1.w * m.r2.z;
+    let a1312 = m.r1.y * m.r2.w - m.r1.w * m.r2.y;
+    let a1212 = m.r1.y * m.r2.z - m.r1.z * m.r2.y;
+    let a0313 = m.r1.x * m.r3.w - m.r1.w * m.r3.x;
+    let a0213 = m.r1.x * m.r3.z - m.r1.z * m.r3.x;
+    let a0312 = m.r1.x * m.r2.w - m.r1.w * m.r2.x;
+    let a0212 = m.r1.x * m.r2.z - m.r1.z * m.r2.x;
+    let a0113 = m.r1.x * m.r3.y - m.r1.y * m.r3.x;
+    let a0112 = m.r1.x * m.r2.y - m.r1.y * m.r2.x;
+
+    let det = m.r0.x * (m.r1.y * a2323 - m.r1.z * a1323 + m.r1.w * a1223)
+        - m.r0.y * (m.r1.x * a2323 - m.r1.z * a0323 + m.r1.w * a0223)
+        + m.r0.z * (m.r1.x * a1323 - m.r1.y * a0323 + m.r1.w * a0123)
+        - m.r0.w * (m.r1.x * a1223 - m.r1.y * a0223 + m.r1.z * a0123);
+    let det = 1.0 / det;
+
+    Mat4x4 {
+        r0: Vec4 {
+            x: det * (m.r1.y * a2323 - m.r1.z * a1323 + m.r1.w * a1223),
+            y: det * -(m.r0.y * a2323 - m.r0.z * a1323 + m.r0.w * a1223),
+            z: det * (m.r0.y * a2313 - m.r0.z * a1313 + m.r0.w * a1213),
+            w: det * -(m.r0.y * a2312 - m.r0.z * a1312 + m.r0.w * a1212),
+        },
+        r1: Vec4 {
+            x: det * -(m.r1.x * a2323 - m.r1.z * a0323 + m.r1.w * a0223),
+            y: det * (m.r0.x * a2323 - m.r0.z * a0323 + m.r0.w * a0223),
+            z: det * -(m.r0.x * a2313 - m.r0.z * a0313 + m.r0.w * a0213),
+            w: det * (m.r0.x * a2312 - m.r0.z * a0312 + m.r0.w * a0212),
+        },
+        r2: Vec4 {
+            x: det * (m.r1.x * a1323 - m.r1.y * a0323 + m.r1.w * a0123),
+            y: det * -(m.r0.x * a1323 - m.r0.y * a0323 + m.r0.w * a0123),
+            z: det * (m.r0.x * a1313 - m.r0.y * a0313 + m.r0.w * a0113),
+            w: det * -(m.r0.x * a1312 - m.r0.y * a0312 + m.r0.w * a0112),
+        },
+        r3: Vec4 {
+            x: det * -(m.r1.x * a1223 - m.r1.y * a0223 + m.r1.z * a0123),
+            y: det * (m.r0.x * a1223 - m.r0.y * a0223 + m.r0.z * a0123),
+            z: det * -(m.r0.x * a1213 - m.r0.y * a0213 + m.r0.z * a0113),
+            w: det * (m.r0.x * a1212 - m.r0.y * a0212 + m.r0.z * a0112),
+        },
+    }
+}
+
 pub fn view(position: Vec3, forward: Vec3, up: Vec3) -> Mat4x4 {
     let forward = forward.normalize();
     let right = up.cross(forward).normalize();
