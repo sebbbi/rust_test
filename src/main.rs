@@ -51,15 +51,7 @@ fn main() {
 
         let diagonal_length = diagonal.length();
 
-        let volume_scale = Vec3 {
-            x: 1.0,
-            y: 1.0,
-            z: 1.0,
-		};
-
-        // TODO
-        // VOXEL TO DISTANCE
-        // DISTANCE TO NORMALIZED CUBE XYZ
+        let volume_scale = Vec3::from_scalar(diagonal_length) / diagonal;
 
         /*
         let tile_size = 8;
@@ -78,21 +70,21 @@ fn main() {
                     let mut has_outside = false;
                     for iz in 0..tile_size {
                         for iy in 0..tile_size {
-                            for ix in 0..tile_size {                                
+                            for ix in 0..tile_size {
                                 let voxel_offset = iz * stride_z + iy * stride_y + ix;
                                 let d = sdf.voxels[tile_offset as usize + voxel_offset as usize];
                                 if d < level_zero { has_inside = true; };
                                 if d > level_zero { has_outside = true; };
-					        }
-					    }                    
-					}
+                            }
+                        }
+                    }
                     if has_inside && has_outside {
                         edge_tile_count += 1;
-					}
+                    }
                     total_tile_count += 1;
-		        } 
-		    }         
-		} 
+                }
+            }
+        }
 
         println!("Tile size = {}x{}x{}, Total tiles = {}, Edge tiles = {} ({}%)", tile_size, tile_size, tile_size, total_tile_count, edge_tile_count, edge_tile_count * 100 / total_tile_count);
         */

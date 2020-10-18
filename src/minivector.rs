@@ -17,6 +17,10 @@ impl Vec3 {
         }
     }
 
+    pub fn from_scalar(v: f32) -> Vec3 {
+        Vec3 { x: v, y: v, z: v }
+    }
+
     pub fn dot(self, other: Vec3) -> f32 {
         self.x * other.x + self.y * other.y + self.z * other.z
     }
@@ -65,6 +69,18 @@ impl ops::Mul<Vec3> for Vec3 {
             x: self.x * _rhs.x,
             y: self.y * _rhs.y,
             z: self.z * _rhs.z,
+        }
+    }
+}
+
+impl ops::Div<Vec3> for Vec3 {
+    type Output = Vec3;
+
+    fn div(self, _rhs: Vec3) -> Vec3 {
+        Vec3 {
+            x: self.x / _rhs.x,
+            y: self.y / _rhs.y,
+            z: self.z / _rhs.z,
         }
     }
 }

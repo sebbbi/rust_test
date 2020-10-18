@@ -44,14 +44,14 @@ impl Loader {
     }
 
     pub fn load_array_u16(&mut self, bytes: &[u8], count: usize) -> Vec<u16> {
-    (0..count)
-        .map(|_| {
-            let out =
-                u16::from_le_bytes(bytes[self.offset..self.offset + 2].try_into().unwrap());
-            self.offset += 2;
-            out
-        })
-        .collect()
+        (0..count)
+            .map(|_| {
+                let out =
+                    u16::from_le_bytes(bytes[self.offset..self.offset + 2].try_into().unwrap());
+                self.offset += 2;
+                out
+            })
+            .collect()
     }
 
     pub fn load_array_f32(&mut self, bytes: &[u8], count: usize) -> Vec<f32> {
@@ -90,10 +90,7 @@ pub fn load_sdf(filename: &str) -> io::Result<Sdf> {
     println!("Header {:?}", header);
     println!("Voxels {:?}", voxels[0]);
 
-    let sdf = Sdf {
-        header,
-        voxels,
-	};
+    let sdf = Sdf { header, voxels };
 
     Ok(sdf)
 }
