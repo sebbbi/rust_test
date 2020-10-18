@@ -29,6 +29,11 @@ impl Vec3 {
         }
     }
 
+    pub fn length(self) -> f32 {
+        let l2 = self.x * self.x + self.y * self.y + self.z * self.z;
+        l2.sqrt()
+    }
+
     pub fn normalize(self) -> Vec3 {
         let l2 = self.x * self.x + self.y * self.y + self.z * self.z;
         let l_inv = 1.0 / l2.sqrt();

@@ -38,6 +38,30 @@ fn main() {
     unsafe {
         let sdf = load_sdf("data/ganymede-and-jupiter.sdf").expect("SDF loading failed");
 
+        let dx = sdf.header.dx;
+        let dim = sdf.header.dim;
+
+        let diagonal = Vec3 {
+            x: dx * dim.0 as f32,
+            y: dx * dim.1 as f32,
+            z: dx * dim.2 as f32,
+        };
+
+        let center_to_edge = diagonal * 0.5;
+
+        let diagonal_length = diagonal.length();
+
+        let volume_scale = Vec3 {
+            x: 1.0,
+            y: 1.0,
+            z: 1.0,
+		};
+
+        // TODO
+        // VOXEL TO DISTANCE
+        // DISTANCE TO NORMALIZED CUBE XYZ
+
+        /*
         let tile_size = 8;
         let dim = sdf.header.dim;
         let stride_y = dim.0;
@@ -71,6 +95,7 @@ fn main() {
 		} 
 
         println!("Tile size = {}x{}x{}, Total tiles = {}, Edge tiles = {} ({}%)", tile_size, tile_size, tile_size, total_tile_count, edge_tile_count, edge_tile_count * 100 / total_tile_count);
+        */
 
         let window_width = 1280;
         let window_height = 720;
@@ -288,8 +313,12 @@ fn main() {
 
         #[derive(Clone, Debug, Copy)]
         struct Uniforms {
+            model_to_world: Mat4x4,
             model_to_screen: Mat4x4,
             color: Vec4,
+            camera_position: Vec4,
+            volume_scale: Vec4,
+            center_to_edge: Vec4,
         }
 
         let uniform_buffer_info = vk::BufferCreateInfo {
@@ -783,8 +812,8 @@ fn main() {
             let mut camera = Camera {
                 position: Vec3 {
                     x: 0.0,
-                    y: 2.0,
-                    z: 5.0,
+                    y: 40.0,
+                    z: 100.0,
                 },
                 direction: Vec3 {
                     x: 0.0,
@@ -874,9 +903,9 @@ fn main() {
                             }
 
                             let color = Vec4 {
-                                x: 0.3,
-                                y: 0.6,
-                                z: 0.9,
+                                x: 1.0,
+                                y: 0.1,
+                                z: 0.0,
                                 w: 0.0,
                             };
 
@@ -905,8 +934,12 @@ fn main() {
                                 );
 
                             let uniform_buffer_data = Uniforms {
-                                color,
+                                model_to_world,
                                 model_to_screen,
+                                color,
+                                camera_position: camera.position.to_4d(),
+                                volume_scale: volume_scale.to_4d(),
+                                center_to_edge: center_to_edge.to_4d(),
                             };
 
                             let uniform_ptr = base
