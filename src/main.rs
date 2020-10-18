@@ -51,8 +51,15 @@ fn main() {
         let diagonal_length = diagonal.length();
         let volume_scale = Vec3::from_scalar(diagonal_length) / diagonal;
 
+        let texels = Vec3 {
+            x: dim.0 as f32,
+            y: dim.1 as f32,
+            z: dim.2 as f32,
+        };
+        let texel_scale = Vec3::from_scalar(1.0) / texels;
+
         /*
-        let tile_size = 8;
+        let tile_size = 16;
         let dim = sdf.header.dim;
         let stride_y = dim.0;
         let stride_z = dim.0 * dim.1;
@@ -84,7 +91,7 @@ fn main() {
             }
         }
 
-        println!("Tile size = {}x{}x{}, Total tiles = {}, Edge tiles = {} ({}%)", tile_size, tile_size, tile_size, total_tile_count, edge_tile_count, edge_tile_count * 100 / total_tile_count);
+        println!("Tile size = {}x{}x{}, Total tiles = {}, Edge tiles = {} ({}%)", tile_size, tile_size, tile_size, total_tile_count, edge_tile_count, edge_tile_count as f32 * 100.0 / total_tile_count as f32);
         */
 
         let window_width = 1280;
@@ -310,6 +317,7 @@ fn main() {
             camera_position: Vec4,
             volume_scale: Vec4,
             center_to_edge: Vec4,
+            texel_scale: Vec4,
         }
 
         let uniform_buffer_info = vk::BufferCreateInfo {
@@ -803,8 +811,8 @@ fn main() {
             let mut camera = Camera {
                 position: Vec3 {
                     x: 0.0,
-                    y: 50.0,
-                    z: 100.0,
+                    y: 25.0,
+                    z: 50.0,
                 },
                 direction: Vec3 {
                     x: 0.0,
@@ -901,7 +909,8 @@ fn main() {
                             };
 
                             let model_to_world = rot_x_axis(-std::f32::consts::PI / 2.0) // Model from Z-up to Y-up
-                                * rot_y_axis(frame as f32 * 0.001)
+                                * rot_y_axis(3.201)
+//                                * rot_y_axis(frame as f32 * 0.001)
                                 * translate(Vec3 {
                                     x: 0.0, // - 2.0 * (frame as f32 * 0.01).cos(),
                                     y: 0.0, // + 3.0 * (frame as f32 * 0.01).sin(),
@@ -937,6 +946,7 @@ fn main() {
                                 camera_position: camera.position.to_4d(),
                                 volume_scale: volume_scale.to_4d(),
                                 center_to_edge: center_to_edge.to_4d(),
+                                texel_scale: texel_scale.to_4d(),
                             };
 
                             let uniform_ptr = base

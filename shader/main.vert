@@ -10,6 +10,7 @@ layout (binding = 0) uniform UBO {
     vec4 camera_position;
     vec4 volume_scale;
     vec4 center_to_edge;
+    vec4 texel_scale;
 } ubo;
 
 layout (location = 0) in vec4 pos;

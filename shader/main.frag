@@ -12,6 +12,7 @@ layout (binding = 0) uniform UBO {
     vec4 camera_position;
     vec4 volume_scale;
     vec4 center_to_edge;
+    vec4 texel_scale;
 } ubo;
 
 layout (location = 0) in vec3 o_uvw;
@@ -28,6 +29,17 @@ bool outside(vec3 uwv) {
     return false;
 }
 
+vec3 normal(vec3 uvw) {
+    vec3 e = ubo.texel_scale.xyz * 0.5;
+    float xm = texture(samplerColor, uvw + vec3(-e.x,  0,    0)).x;
+    float xp = texture(samplerColor, uvw + vec3( e.x,  0,    0)).x;
+    float ym = texture(samplerColor, uvw + vec3( 0,    -e.y, 0)).x;
+    float yp = texture(samplerColor, uvw + vec3( 0,    e.y,  0)).x;
+    float zm = texture(samplerColor, uvw + vec3( 0,    0,    -e.z)).x;
+    float zp = texture(samplerColor, uvw + vec3( 0,    0,    e.z)).x;
+    return normalize(vec3(xp - xm, yp - ym, zp - zm));
+}
+
 void main() {
     vec3 ray_pos = o_uvw;
     vec3 ray_dir = normalize(o_local_pos - o_local_camera_pos);
@@ -38,19 +50,20 @@ void main() {
         vec3 uvw = ray_pos + ray_dir * d;
         if (outside(uvw)) {
             discarded = true;
-            //discard;
+            discard;
             break;
         }
         float s = texture(samplerColor, uvw).x;
         s = s * 2.0 - 1.0;
         d += s;
-        if (s < 0.001) break;
+        if (s < 0.0001) break;
     }
 
     if (discarded) {
         uFragColor = vec4(1.0, 0.0, 0.0, 1.0);
     }
     else {
-        uFragColor = vec4(0.0, 0.0, 1.0, 1.0) + ubo.color * d;
+        uFragColor = vec4(normal(ray_pos + ray_dir * d), 1.0);
+        //uFragColor = vec4(0.0, 0.0, 1.0, 1.0) + ubo.color * d;
     }
 }
