@@ -224,6 +224,7 @@ fn main() {
             .bind_buffer_memory(index_buffer, index_buffer_memory, 0)
             .unwrap();
 
+/*
         let vertices = [
             Vertex {
                 pos: [-1.0, 1.0, 1.0, 1.0],
@@ -307,6 +308,7 @@ fn main() {
         base.device
             .bind_buffer_memory(vertex_input_buffer, vertex_input_buffer_memory, 0)
             .unwrap();
+            */
 
         #[derive(Clone, Debug, Copy)]
         struct Uniforms {
@@ -336,7 +338,7 @@ fn main() {
             &base.device_memory_properties,
             vk::MemoryPropertyFlags::HOST_VISIBLE | vk::MemoryPropertyFlags::HOST_COHERENT,
         )
-        .expect("Unable to find suitable memorytype for the vertex buffer.");
+        .expect("Unable to find suitable memorytype for the uniform buffer.");
 
         let uniform_buffer_allocate_info = vk::MemoryAllocateInfo {
             allocation_size: uniform_buffer_memory_req.size,
@@ -367,7 +369,7 @@ fn main() {
             &base.device_memory_properties,
             vk::MemoryPropertyFlags::HOST_VISIBLE | vk::MemoryPropertyFlags::HOST_COHERENT,
         )
-        .expect("Unable to find suitable memorytype for the vertex buffer.");
+        .expect("Unable to find suitable memorytype for the image buffer.");
 
         let image_buffer_allocate_info = vk::MemoryAllocateInfo {
             allocation_size: image_buffer_memory_req.size,
@@ -675,6 +677,7 @@ fn main() {
                 ..Default::default()
             },
         ];
+        /*
         let vertex_input_binding_descriptions = [vk::VertexInputBindingDescription {
             binding: 0,
             stride: mem::size_of::<Vertex>() as u32,
@@ -697,6 +700,9 @@ fn main() {
         let vertex_input_state_info = vk::PipelineVertexInputStateCreateInfo::builder()
             .vertex_attribute_descriptions(&vertex_input_attribute_descriptions)
             .vertex_binding_descriptions(&vertex_input_binding_descriptions);
+            */
+
+        let vertex_input_state_info = vk::PipelineVertexInputStateCreateInfo::default();
 
         let vertex_input_assembly_state_info = vk::PipelineInputAssemblyStateCreateInfo {
             topology: vk::PrimitiveTopology::TRIANGLE_LIST,
@@ -1016,12 +1022,12 @@ fn main() {
                                     );
                                     device.cmd_set_viewport(draw_command_buffer, 0, &viewports);
                                     device.cmd_set_scissor(draw_command_buffer, 0, &scissors);
-                                    device.cmd_bind_vertex_buffers(
+                                    /*device.cmd_bind_vertex_buffers(
                                         draw_command_buffer,
                                         0,
                                         &[vertex_input_buffer],
                                         &[0],
-                                    );
+                                    );*/
                                     device.cmd_bind_index_buffer(
                                         draw_command_buffer,
                                         index_buffer,
@@ -1120,8 +1126,8 @@ fn main() {
         base.device.destroy_buffer(index_buffer, None);
         base.device.free_memory(uniform_buffer_memory, None);
         base.device.destroy_buffer(uniform_buffer, None);
-        base.device.free_memory(vertex_input_buffer_memory, None);
-        base.device.destroy_buffer(vertex_input_buffer, None);
+        //base.device.free_memory(vertex_input_buffer_memory, None);
+        //base.device.destroy_buffer(vertex_input_buffer, None);
         for &descriptor_set_layout in desc_set_layouts.iter() {
             base.device
                 .destroy_descriptor_set_layout(descriptor_set_layout, None);
