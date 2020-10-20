@@ -13,8 +13,17 @@ layout (binding = 0) uniform UBO {
     vec4 texel_scale;
 } ubo;
 
-//layout (location = 0) in vec4 pos;
-//layout (location = 1) in vec2 uv;
+struct InstanceData
+{
+	vec4 position;
+};
+
+layout(std140, binding = 1) buffer Instances
+{
+    InstanceData instances[];
+};
+
+layout (binding = 2) uniform sampler3D samplerColor;
 
 layout (location = 0) out vec3 o_uvw;
 layout (location = 1) out vec3 o_local_camera_pos;

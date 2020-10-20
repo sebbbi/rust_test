@@ -32,8 +32,6 @@ struct Vertex {
     uv: [f32; 2],
 }
 
-pub struct App {}
-
 fn main() {
     unsafe {
         let sdf = load_sdf("data/ganymede-and-jupiter.sdf").expect("SDF loading failed");
@@ -224,91 +222,50 @@ fn main() {
             .bind_buffer_memory(index_buffer, index_buffer_memory, 0)
             .unwrap();
 
-/*
-        let vertices = [
-            Vertex {
-                pos: [-1.0, 1.0, 1.0, 1.0],
-                uv: [0.0, 0.0],
-            },
-            Vertex {
-                pos: [1.0, 1.0, 1.0, 1.0],
-                uv: [1.0, 0.0],
-            },
-            Vertex {
-                pos: [-1.0, 1.0, -1.0, 1.0],
-                uv: [0.0, 1.0],
-            },
-            Vertex {
-                pos: [1.0, 1.0, -1.0, 1.0],
-                uv: [1.0, 1.0],
-            },
-            Vertex {
-                pos: [-1.0, -1.0, 1.0, 1.0],
-                uv: [0.0, 0.0],
-            },
-            Vertex {
-                pos: [1.0, -1.0, 1.0, 1.0],
-                uv: [1.0, 0.0],
-            },
-            Vertex {
-                pos: [-1.0, -1.0, -1.0, 1.0],
-                uv: [0.0, 1.0],
-            },
-            Vertex {
-                pos: [1.0, -1.0, -1.0, 1.0],
-                uv: [1.0, 1.0],
-            },
-        ];
-        let vertex_input_buffer_info = vk::BufferCreateInfo {
-            size: std::mem::size_of_val(&vertices) as u64,
-            usage: vk::BufferUsageFlags::VERTEX_BUFFER,
+        const num_instances: usize = 1024;
+
+        #[derive(Clone, Copy)]
+        struct InstanceData {
+            position: Vec4,
+        }
+
+        #[derive(Clone, Copy)]
+        struct InstanceDatas {
+            instances: [InstanceData; num_instances],
+        }
+
+        let instances_buffer_info = vk::BufferCreateInfo {
+            size: std::mem::size_of::<InstanceDatas>() as u64,
+            usage: vk::BufferUsageFlags::STORAGE_BUFFER,
             sharing_mode: vk::SharingMode::EXCLUSIVE,
             ..Default::default()
         };
-        let vertex_input_buffer = base
+        let instances_buffer = base
             .device
-            .create_buffer(&vertex_input_buffer_info, None)
+            .create_buffer(&instances_buffer_info, None)
             .unwrap();
-        let vertex_input_buffer_memory_req = base
-            .device
-            .get_buffer_memory_requirements(vertex_input_buffer);
-        let vertex_input_buffer_memory_index = find_memorytype_index(
-            &vertex_input_buffer_memory_req,
+        let instances_buffer_memory_req =
+            base.device.get_buffer_memory_requirements(instances_buffer);
+        let instances_buffer_memory_index = find_memorytype_index(
+            &instances_buffer_memory_req,
             &base.device_memory_properties,
             vk::MemoryPropertyFlags::HOST_VISIBLE | vk::MemoryPropertyFlags::HOST_COHERENT,
         )
-        .expect("Unable to find suitable memorytype for the vertex buffer.");
+        .expect("Unable to find suitable memorytype for the instances buffer.");
 
-        let vertex_buffer_allocate_info = vk::MemoryAllocateInfo {
-            allocation_size: vertex_input_buffer_memory_req.size,
-            memory_type_index: vertex_input_buffer_memory_index,
+        let instances_buffer_allocate_info = vk::MemoryAllocateInfo {
+            allocation_size: instances_buffer_memory_req.size,
+            memory_type_index: instances_buffer_memory_index,
             ..Default::default()
         };
-        let vertex_input_buffer_memory = base
+        let instances_buffer_memory = base
             .device
-            .allocate_memory(&vertex_buffer_allocate_info, None)
+            .allocate_memory(&instances_buffer_allocate_info, None)
             .unwrap();
 
-        let vert_ptr = base
-            .device
-            .map_memory(
-                vertex_input_buffer_memory,
-                0,
-                vertex_input_buffer_memory_req.size,
-                vk::MemoryMapFlags::empty(),
-            )
-            .unwrap();
-        let mut slice = Align::new(
-            vert_ptr,
-            align_of::<Vertex>() as u64,
-            vertex_input_buffer_memory_req.size,
-        );
-        slice.copy_from_slice(&vertices);
-        base.device.unmap_memory(vertex_input_buffer_memory);
         base.device
-            .bind_buffer_memory(vertex_input_buffer, vertex_input_buffer_memory, 0)
+            .bind_buffer_memory(instances_buffer, instances_buffer_memory, 0)
             .unwrap();
-            */
 
         #[derive(Clone, Debug, Copy)]
         struct Uniforms {
@@ -558,6 +515,10 @@ fn main() {
                 descriptor_count: 1,
             },
             vk::DescriptorPoolSize {
+                ty: vk::DescriptorType::STORAGE_BUFFER,
+                descriptor_count: 1,
+            },
+            vk::DescriptorPoolSize {
                 ty: vk::DescriptorType::COMBINED_IMAGE_SAMPLER,
                 descriptor_count: 1,
             },
@@ -580,6 +541,13 @@ fn main() {
             },
             vk::DescriptorSetLayoutBinding {
                 binding: 1,
+                descriptor_type: vk::DescriptorType::STORAGE_BUFFER,
+                descriptor_count: 1,
+                stage_flags: vk::ShaderStageFlags::FRAGMENT | vk::ShaderStageFlags::VERTEX,
+                ..Default::default()
+            },
+            vk::DescriptorSetLayoutBinding {
+                binding: 2,
                 descriptor_type: vk::DescriptorType::COMBINED_IMAGE_SAMPLER,
                 descriptor_count: 1,
                 stage_flags: vk::ShaderStageFlags::FRAGMENT | vk::ShaderStageFlags::VERTEX,
@@ -608,6 +576,12 @@ fn main() {
             range: mem::size_of::<Uniforms>() as u64,
         };
 
+        let storage_buffer_descriptor = vk::DescriptorBufferInfo {
+            buffer: instances_buffer,
+            offset: 0,
+            range: mem::size_of::<InstanceDatas>() as u64,
+        };
+
         let tex_descriptor = vk::DescriptorImageInfo {
             image_layout: vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL,
             image_view: tex_image_view,
@@ -617,6 +591,7 @@ fn main() {
         let write_desc_sets = [
             vk::WriteDescriptorSet {
                 dst_set: descriptor_sets[0],
+                dst_binding: 0,
                 descriptor_count: 1,
                 descriptor_type: vk::DescriptorType::UNIFORM_BUFFER,
                 p_buffer_info: &uniform_buffer_descriptor,
@@ -625,6 +600,14 @@ fn main() {
             vk::WriteDescriptorSet {
                 dst_set: descriptor_sets[0],
                 dst_binding: 1,
+                descriptor_count: 1,
+                descriptor_type: vk::DescriptorType::STORAGE_BUFFER,
+                p_buffer_info: &storage_buffer_descriptor,
+                ..Default::default()
+            },
+            vk::WriteDescriptorSet {
+                dst_set: descriptor_sets[0],
+                dst_binding: 2,
                 descriptor_count: 1,
                 descriptor_type: vk::DescriptorType::COMBINED_IMAGE_SAMPLER,
                 p_image_info: &tex_descriptor,
@@ -826,6 +809,40 @@ fn main() {
                     z: -1.0,
                 },
             };
+
+            /*
+            let instances_buffer_data2 = (0..num_instances)
+                .map(|i| i)
+                .collect();
+               */
+            
+            let instances_buffer_data : Vec<InstanceData> = (0..num_instances)
+                .map(|i| InstanceData {
+                    position: Vec4 {
+                        x: 0.0,
+                        y: 5.0 * i as f32,
+                        z: 0.0,
+                        w: 1.0,
+                    },
+                })
+                .collect();
+
+            let instances_ptr = base
+                .device
+                .map_memory(
+                    instances_buffer_memory,
+                    0,
+                    instances_buffer_memory_req.size,
+                    vk::MemoryMapFlags::empty(),
+                )
+                .unwrap();
+            let mut instances_aligned_slice = Align::new(
+                instances_ptr,
+                align_of::<Vec4>() as u64,
+                instances_buffer_memory_req.size,
+            );
+            instances_aligned_slice.copy_from_slice(&[&instances_buffer_data]);
+            base.device.unmap_memory(instances_buffer_memory);
 
             let mut time_start = Instant::now();
             let mut frame = 0u32;
@@ -1126,8 +1143,8 @@ fn main() {
         base.device.destroy_buffer(index_buffer, None);
         base.device.free_memory(uniform_buffer_memory, None);
         base.device.destroy_buffer(uniform_buffer, None);
-        //base.device.free_memory(vertex_input_buffer_memory, None);
-        //base.device.destroy_buffer(vertex_input_buffer, None);
+        base.device.free_memory(instances_buffer_memory, None);
+        base.device.destroy_buffer(instances_buffer, None);
         for &descriptor_set_layout in desc_set_layouts.iter() {
             base.device
                 .destroy_descriptor_set_layout(descriptor_set_layout, None);

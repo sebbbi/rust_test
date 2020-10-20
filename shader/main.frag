@@ -2,8 +2,6 @@
 #extension GL_ARB_separate_shader_objects : enable
 #extension GL_ARB_shading_language_420pack : enable
 
-layout (binding = 1) uniform sampler3D samplerColor;
-
 layout (binding = 0) uniform UBO {
     mat4 model_to_world;
     mat4 world_to_model;
@@ -14,6 +12,18 @@ layout (binding = 0) uniform UBO {
     vec4 center_to_edge;
     vec4 texel_scale;
 } ubo;
+
+struct InstanceData
+{
+	vec4 position;
+};
+
+layout(std140, binding = 1) buffer Instances
+{
+    InstanceData instances[];
+};
+
+layout (binding = 2) uniform sampler3D samplerColor;
 
 layout (location = 0) in vec3 o_uvw;
 layout (location = 1) in vec3 o_local_camera_pos;
