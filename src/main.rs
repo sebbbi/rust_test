@@ -269,6 +269,7 @@ fn main() {
 
         #[derive(Clone, Debug, Copy)]
         struct Uniforms {
+            world_to_screen: Mat4x4,
             model_to_world: Mat4x4,
             world_to_model: Mat4x4,
             model_to_screen: Mat4x4,
@@ -940,8 +941,8 @@ fn main() {
                                     z: 0.0,
                                 });
 
-                            let model_to_view = model_to_world
-                                * view(
+                            let world_to_screen =
+                            view(
                                     camera.position,
                                     camera.direction,
                                     Vec3 {
@@ -949,19 +950,20 @@ fn main() {
                                         y: 1.0,
                                         z: 0.0,
                                     },
-                                );
-
-                            let model_to_screen = model_to_view
-                                * projection(
+                                ) * projection(
                                     std::f32::consts::PI / 2.0,
                                     window_width as f32 / window_height as f32,
                                     0.1,
                                     1000.0,
                                 );
 
+                            let model_to_screen = model_to_world
+                                * world_to_screen;
+
                             let world_to_model = inverse(model_to_world);
 
                             let uniform_buffer_data = Uniforms {
+                            world_to_screen,
                                 model_to_world,
                                 world_to_model,
                                 model_to_screen,

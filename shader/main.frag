@@ -3,6 +3,7 @@
 #extension GL_ARB_shading_language_420pack : enable
 
 layout (binding = 0) uniform UBO {
+    mat4 world_to_screen;
     mat4 model_to_world;
     mat4 world_to_model;
     mat4 model_to_screen;
