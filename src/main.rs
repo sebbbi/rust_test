@@ -1,3 +1,6 @@
+#![allow(unused_imports)]
+#![allow(dead_code)]
+
 extern crate winit;
 
 use std::default::Default;
@@ -222,7 +225,7 @@ fn main() {
             .bind_buffer_memory(index_buffer, index_buffer_memory, 0)
             .unwrap();
 
-        const num_instances: usize = 1024;
+        const NUM_INSTANCES: usize = 1024;
 
         #[derive(Clone, Copy)]
         struct InstanceData {
@@ -231,7 +234,7 @@ fn main() {
 
         #[derive(Clone, Copy)]
         struct InstanceDatas {
-            instances: [InstanceData; num_instances],
+            instances: [InstanceData; NUM_INSTANCES],
         }
 
         let instances_buffer_info = vk::BufferCreateInfo {
@@ -661,30 +664,6 @@ fn main() {
                 ..Default::default()
             },
         ];
-        /*
-        let vertex_input_binding_descriptions = [vk::VertexInputBindingDescription {
-            binding: 0,
-            stride: mem::size_of::<Vertex>() as u32,
-            input_rate: vk::VertexInputRate::VERTEX,
-        }];
-        let vertex_input_attribute_descriptions = [
-            vk::VertexInputAttributeDescription {
-                location: 0,
-                binding: 0,
-                format: vk::Format::R32G32B32A32_SFLOAT,
-                offset: offset_of!(Vertex, pos) as u32,
-            },
-            vk::VertexInputAttributeDescription {
-                location: 1,
-                binding: 0,
-                format: vk::Format::R32G32_SFLOAT,
-                offset: offset_of!(Vertex, uv) as u32,
-            },
-        ];
-        let vertex_input_state_info = vk::PipelineVertexInputStateCreateInfo::builder()
-            .vertex_attribute_descriptions(&vertex_input_attribute_descriptions)
-            .vertex_binding_descriptions(&vertex_input_binding_descriptions);
-            */
 
         let vertex_input_state_info = vk::PipelineVertexInputStateCreateInfo::default();
 
@@ -811,13 +790,7 @@ fn main() {
                 },
             };
 
-            /*
-            let instances_buffer_data2 = (0..num_instances)
-                .map(|i| i)
-                .collect();
-               */
-            
-            let instances_buffer_data : Vec<InstanceData> = (0..num_instances)
+            let instances_buffer_data: Vec<InstanceData> = (0..NUM_INSTANCES)
                 .map(|i| InstanceData {
                     position: Vec4 {
                         x: 0.0,
@@ -941,29 +914,27 @@ fn main() {
                                     z: 0.0,
                                 });
 
-                            let world_to_screen =
-                            view(
-                                    camera.position,
-                                    camera.direction,
-                                    Vec3 {
-                                        x: 0.0,
-                                        y: 1.0,
-                                        z: 0.0,
-                                    },
-                                ) * projection(
-                                    std::f32::consts::PI / 2.0,
-                                    window_width as f32 / window_height as f32,
-                                    0.1,
-                                    1000.0,
-                                );
+                            let world_to_screen = view(
+                                camera.position,
+                                camera.direction,
+                                Vec3 {
+                                    x: 0.0,
+                                    y: 1.0,
+                                    z: 0.0,
+                                },
+                            ) * projection(
+                                std::f32::consts::PI / 2.0,
+                                window_width as f32 / window_height as f32,
+                                0.1,
+                                1000.0,
+                            );
 
-                            let model_to_screen = model_to_world
-                                * world_to_screen;
+                            let model_to_screen = model_to_world * world_to_screen;
 
                             let world_to_model = inverse(model_to_world);
 
                             let uniform_buffer_data = Uniforms {
-                            world_to_screen,
+                                world_to_screen,
                                 model_to_world,
                                 world_to_model,
                                 model_to_screen,
