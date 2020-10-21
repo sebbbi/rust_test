@@ -163,3 +163,46 @@ pub fn orient_sdf(sdf: &Sdf, x_orient: AxisFlip, y_orient: AxisFlip, z_orient: A
 
     Sdf { header, voxels }
 }
+
+pub fn downsample_2x2_sdf(sdf: &Sdf) -> Sdf {
+    let x_dim = sdf.header.dim.0 / 2;
+    let y_dim = sdf.header.dim.1 / 2;
+    let z_dim = sdf.header.dim.2 / 2;
+
+    let stride_y = (sdf.header.dim.0) as u32;
+    let stride_z = (sdf.header.dim.0 * sdf.header.dim.1) as u32;
+
+    let stride_write_y = x_dim as u32;
+    let stride_write_z = (x_dim * y_dim) as u32;
+
+    let mut voxels = vec![0; sdf.voxels.len() / 8];
+    for z in 0..z_dim {
+        for y in 0..y_dim {
+            for x in 0..x_dim {
+                let write_addr = x + y * stride_write_y + z * stride_write_z;
+                let read_addr_base = x * 2 + y * stride_y * 2 + z * stride_z * 2;
+
+                let sum = sdf.voxels[(read_addr_base) as usize] as u32
+                    + sdf.voxels[(read_addr_base + 1) as usize] as u32
+                    + sdf.voxels[(read_addr_base + stride_y) as usize] as u32
+                    + sdf.voxels[(read_addr_base + 1 + stride_y) as usize] as u32
+                    + sdf.voxels[(read_addr_base + stride_z) as usize] as u32
+                    + sdf.voxels[(read_addr_base + 1 + stride_z) as usize] as u32
+                    + sdf.voxels[(read_addr_base + stride_y + stride_z) as usize] as u32
+                    + sdf.voxels[(read_addr_base + 1 + stride_y + stride_z) as usize] as u32;
+
+                voxels[write_addr as usize] = (sum / 8) as u16;
+            }
+        }
+    }
+
+    let header = SdfHeader {
+        dim: (x_dim as u32, y_dim as u32, z_dim as u32),
+        box_min: (
+            0.0, 0.0, 0.0, // Not used
+        ),
+        dx: sdf.header.dx * 2.0,
+    };
+
+    Sdf { header, voxels }
+}

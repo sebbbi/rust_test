@@ -3,13 +3,13 @@
 
 extern crate winit;
 
+use rand::Rng;
 use std::default::Default;
 use std::ffi::CString;
 use std::io::Cursor;
 use std::mem::{self, align_of};
 use std::os::raw::c_void;
 use std::time::Instant;
-use rand::Rng;
 
 use ash::util::*;
 use ash::vk;
@@ -45,6 +45,11 @@ fn main() {
             AxisFlip::PositiveZ,
             AxisFlip::PositiveY,
         );
+        let sdf = downsample_2x2_sdf(&sdf);
+        let sdf = downsample_2x2_sdf(&sdf);
+        let sdf = downsample_2x2_sdf(&sdf);
+        let sdf = downsample_2x2_sdf(&sdf);
+        let sdf = downsample_2x2_sdf(&sdf);
 
         let dx = sdf.header.dx;
         let dim = sdf.header.dim;
@@ -196,12 +201,13 @@ fn main() {
 
         let num_indices = NUM_INSTANCES * cube_indices.len();
 
-        let index_buffer_data: Vec<u32> = (0..num_indices).map(|i| {
-            let cube = i as u32 / NUM_CUBE_INDICES;
-            let cube_local = i as u32 % NUM_CUBE_INDICES;
-            cube_indices[cube_local as usize] + cube * NUM_CUBE_VERTICES
-		})
-        .collect();
+        let index_buffer_data: Vec<u32> = (0..num_indices)
+            .map(|i| {
+                let cube = i as u32 / NUM_CUBE_INDICES;
+                let cube_local = i as u32 % NUM_CUBE_INDICES;
+                cube_indices[cube_local as usize] + cube * NUM_CUBE_VERTICES
+            })
+            .collect();
 
         let index_buffer_info = vk::BufferCreateInfo {
             size: std::mem::size_of_val(&index_buffer_data[..]) as u64,
@@ -814,7 +820,7 @@ fn main() {
             let mut rng = rand::thread_rng();
 
             let instances_buffer_data: Vec<InstanceData> = (0..NUM_INSTANCES)
-                .map(|i| InstanceData {
+                .map(|_i| InstanceData {
                     position: Vec4 {
                         x: rng.gen_range(-8000.0, 8000.0),
                         y: rng.gen_range(-8000.0, 8000.0),
