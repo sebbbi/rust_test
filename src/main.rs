@@ -9,6 +9,7 @@ use std::io::Cursor;
 use std::mem::{self, align_of};
 use std::os::raw::c_void;
 use std::time::Instant;
+use rand::Rng;
 
 use ash::util::*;
 use ash::vk;
@@ -38,6 +39,12 @@ struct Vertex {
 fn main() {
     unsafe {
         let sdf = load_sdf("data/ganymede-and-jupiter.sdf").expect("SDF loading failed");
+        let sdf = orient_sdf(
+            &sdf,
+            AxisFlip::PositiveX,
+            AxisFlip::PositiveZ,
+            AxisFlip::PositiveY,
+        );
 
         let dx = sdf.header.dx;
         let dim = sdf.header.dim;
@@ -178,12 +185,26 @@ fn main() {
                     .unwrap()
             })
             .collect();
-        let index_buffer_data = [
+
+        const NUM_CUBE_INDICES: u32 = 3 * 6 * 2;
+        const NUM_CUBE_VERTICES: u32 = 8;
+
+        let cube_indices = [
             0u32, 2, 1, 2, 3, 1, 2, 6, 3, 6, 7, 3, 7, 1, 3, 7, 5, 1, 5, 4, 1, 1, 4, 0, 0, 4, 6, 0,
             6, 2, 6, 5, 7, 6, 4, 5,
         ];
+
+        let num_indices = NUM_INSTANCES * cube_indices.len();
+
+        let index_buffer_data: Vec<u32> = (0..num_indices).map(|i| {
+            let cube = i as u32 / NUM_CUBE_INDICES;
+            let cube_local = i as u32 % NUM_CUBE_INDICES;
+            cube_indices[cube_local as usize] + cube * NUM_CUBE_VERTICES
+		})
+        .collect();
+
         let index_buffer_info = vk::BufferCreateInfo {
-            size: std::mem::size_of_val(&index_buffer_data) as u64,
+            size: std::mem::size_of_val(&index_buffer_data[..]) as u64,
             usage: vk::BufferUsageFlags::INDEX_BUFFER,
             sharing_mode: vk::SharingMode::EXCLUSIVE,
             ..Default::default()
@@ -219,13 +240,13 @@ fn main() {
             align_of::<u32>() as u64,
             index_buffer_memory_req.size,
         );
-        index_slice.copy_from_slice(&index_buffer_data);
+        index_slice.copy_from_slice(&index_buffer_data[..]);
         base.device.unmap_memory(index_buffer_memory);
         base.device
             .bind_buffer_memory(index_buffer, index_buffer_memory, 0)
             .unwrap();
 
-        const NUM_INSTANCES: usize = 1024;
+        const NUM_INSTANCES: usize = 1024 * 1024;
 
         #[derive(Clone, Copy)]
         struct InstanceData {
@@ -790,12 +811,14 @@ fn main() {
                 },
             };
 
+            let mut rng = rand::thread_rng();
+
             let instances_buffer_data: Vec<InstanceData> = (0..NUM_INSTANCES)
                 .map(|i| InstanceData {
                     position: Vec4 {
-                        x: 0.0,
-                        y: 5.0 * i as f32,
-                        z: 0.0,
+                        x: rng.gen_range(-8000.0, 8000.0),
+                        y: rng.gen_range(-8000.0, 8000.0),
+                        z: rng.gen_range(-8000.0, 8000.0),
                         w: 1.0,
                     },
                 })
@@ -812,10 +835,10 @@ fn main() {
                 .unwrap();
             let mut instances_aligned_slice = Align::new(
                 instances_ptr,
-                align_of::<Vec4>() as u64,
+                align_of::<u8>() as u64,
                 instances_buffer_memory_req.size,
             );
-            instances_aligned_slice.copy_from_slice(&[&instances_buffer_data]);
+            instances_aligned_slice.copy_from_slice(&instances_buffer_data[..]);
             base.device.unmap_memory(instances_buffer_memory);
 
             let mut time_start = Instant::now();
@@ -925,8 +948,8 @@ fn main() {
                             ) * projection(
                                 std::f32::consts::PI / 2.0,
                                 window_width as f32 / window_height as f32,
-                                0.1,
-                                1000.0,
+                                1.0,
+                                10000000.0,
                             );
 
                             let model_to_screen = model_to_world * world_to_screen;

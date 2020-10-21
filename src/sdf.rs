@@ -94,3 +94,72 @@ pub fn load_sdf(filename: &str) -> io::Result<Sdf> {
 
     Ok(sdf)
 }
+
+pub enum AxisFlip {
+    PositiveX,
+    NegativeX,
+    PositiveY,
+    NegativeY,
+    PositiveZ,
+    NegativeZ,
+}
+
+pub fn orient_sdf(sdf: &Sdf, x_orient: AxisFlip, y_orient: AxisFlip, z_orient: AxisFlip) -> Sdf {
+    let stride_x = 1i32;
+    let stride_y = (sdf.header.dim.0) as i32;
+    let stride_z = (sdf.header.dim.0 * sdf.header.dim.1) as i32;
+
+    let orientation = |orient| match orient {
+        AxisFlip::PositiveX => (sdf.header.dim.0 as i32, 0, 1, stride_x),
+        AxisFlip::NegativeX => (
+            sdf.header.dim.0 as i32,
+            sdf.header.dim.0 as i32 - 1,
+            -1,
+            stride_x,
+        ),
+        AxisFlip::PositiveY => (sdf.header.dim.1 as i32, 0, 1, stride_y),
+        AxisFlip::NegativeY => (
+            sdf.header.dim.1 as i32,
+            sdf.header.dim.1 as i32 - 1,
+            -1,
+            stride_y,
+        ),
+        AxisFlip::PositiveZ => (sdf.header.dim.2 as i32, 0, 1, stride_z),
+        AxisFlip::NegativeZ => (
+            sdf.header.dim.2 as i32,
+            sdf.header.dim.2 as i32 - 1,
+            -1,
+            stride_z,
+        ),
+    };
+
+    let (x_dim, x_start, x_step, x_stride): (i32, i32, i32, i32) = orientation(x_orient);
+    let (y_dim, y_start, y_step, y_stride) = orientation(y_orient);
+    let (z_dim, z_start, z_step, z_stride) = orientation(z_orient);
+
+    let stride_y = x_dim;
+    let stride_z = x_dim * y_dim;
+
+    let mut voxels = vec![0; sdf.voxels.len()];
+    for z in 0..z_dim {
+        for y in 0..y_dim {
+            for x in 0..x_dim {
+                let write_addr = x + y * stride_y + z * stride_z;
+                let read_addr = (x * x_step + x_start) * x_stride
+                    + (y * y_step + y_start) * y_stride
+                    + (z * z_step + z_start) * z_stride;
+                voxels[write_addr as usize] = sdf.voxels[read_addr as usize];
+            }
+        }
+    }
+
+    let header = SdfHeader {
+        dim: (x_dim as u32, y_dim as u32, z_dim as u32),
+        box_min: (
+            0.0, 0.0, 0.0, // Not used
+        ),
+        dx: sdf.header.dx,
+    };
+
+    Sdf { header, voxels }
+}
