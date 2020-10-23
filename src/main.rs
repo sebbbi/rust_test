@@ -46,10 +46,10 @@ fn main() {
             AxisFlip::PositiveY,
         );
         let sdf = downsample_2x2_sdf(&sdf);
-        let sdf = downsample_2x2_sdf(&sdf);
-        let sdf = downsample_2x2_sdf(&sdf);
-        let sdf = downsample_2x2_sdf(&sdf);
-        let sdf = downsample_2x2_sdf(&sdf);
+        //let sdf = downsample_2x2_sdf(&sdf);
+        //let sdf = downsample_2x2_sdf(&sdf);
+        //let sdf = downsample_2x2_sdf(&sdf);
+        //let sdf = downsample_2x2_sdf(&sdf);
 
         let dx = sdf.header.dx;
         let dim = sdf.header.dim;
@@ -211,7 +211,7 @@ fn main() {
 
         let index_buffer_info = vk::BufferCreateInfo {
             size: std::mem::size_of_val(&index_buffer_data[..]) as u64,
-            usage: vk::BufferUsageFlags::INDEX_BUFFER,
+            usage: vk::BufferUsageFlags::TRANSFER_SRC,
             sharing_mode: vk::SharingMode::EXCLUSIVE,
             ..Default::default()
         };
@@ -250,6 +250,33 @@ fn main() {
         base.device.unmap_memory(index_buffer_memory);
         base.device
             .bind_buffer_memory(index_buffer, index_buffer_memory, 0)
+            .unwrap();
+
+        let index_buffer_gpu_info = vk::BufferCreateInfo {
+            size: std::mem::size_of_val(&index_buffer_data[..]) as u64,
+            usage: vk::BufferUsageFlags::TRANSFER_DST | vk::BufferUsageFlags::INDEX_BUFFER,
+            sharing_mode: vk::SharingMode::EXCLUSIVE,
+            ..Default::default()
+        };
+        let index_buffer_gpu = base.device.create_buffer(&index_buffer_gpu_info, None).unwrap();
+        let index_buffer_gpu_memory_req = base.device.get_buffer_memory_requirements(index_buffer_gpu);
+        let index_buffer_gpu_memory_index = find_memorytype_index(
+            &index_buffer_gpu_memory_req,
+            &base.device_memory_properties,
+            vk::MemoryPropertyFlags::DEVICE_LOCAL,
+        )
+        .expect("Unable to find suitable memorytype for the index buffer.");
+        let index_allocate_info = vk::MemoryAllocateInfo {
+            allocation_size: index_buffer_gpu_memory_req.size,
+            memory_type_index: index_buffer_gpu_memory_index,
+            ..Default::default()
+        };
+        let index_buffer_gpu_memory = base
+            .device
+            .allocate_memory(&index_allocate_info, None)
+            .unwrap();
+        base.device
+            .bind_buffer_memory(index_buffer_gpu, index_buffer_gpu_memory, 0)
             .unwrap();
 
         const NUM_INSTANCES: usize = 1024 * 1024;
@@ -435,7 +462,7 @@ fn main() {
             &[],
             &[],
             &[],
-            |device, texture_command_buffer| {
+            |device, setup_command_buffer| {
                 let texture_barrier = vk::ImageMemoryBarrier {
                     dst_access_mask: vk::AccessFlags::TRANSFER_WRITE,
                     new_layout: vk::ImageLayout::TRANSFER_DST_OPTIMAL,
@@ -449,7 +476,7 @@ fn main() {
                     ..Default::default()
                 };
                 device.cmd_pipeline_barrier(
-                    texture_command_buffer,
+                    setup_command_buffer,
                     vk::PipelineStageFlags::BOTTOM_OF_PIPE,
                     vk::PipelineStageFlags::TRANSFER,
                     vk::DependencyFlags::empty(),
@@ -457,7 +484,7 @@ fn main() {
                     &[],
                     &[texture_barrier],
                 );
-                let buffer_copy_regions = vk::BufferImageCopy::builder()
+                let buffer_image_copy_regions = vk::BufferImageCopy::builder()
                     .image_subresource(
                         vk::ImageSubresourceLayers::builder()
                             .aspect_mask(vk::ImageAspectFlags::COLOR)
@@ -471,12 +498,26 @@ fn main() {
                     });
 
                 device.cmd_copy_buffer_to_image(
-                    texture_command_buffer,
+                    setup_command_buffer,
                     image_buffer,
                     texture_image,
                     vk::ImageLayout::TRANSFER_DST_OPTIMAL,
-                    &[buffer_copy_regions.build()],
+                    &[buffer_image_copy_regions.build()],
                 );
+
+                let buffer_copy_regions = vk::BufferCopy {
+                    src_offset: 0,
+                    dst_offset: 0,
+                    size: std::mem::size_of_val(&index_buffer_data[..]) as u64,
+                };
+
+                device.cmd_copy_buffer(
+                    setup_command_buffer,
+                    index_buffer,
+                    index_buffer_gpu,
+                    &[buffer_copy_regions],
+                );
+
                 let texture_barrier_end = vk::ImageMemoryBarrier {
                     src_access_mask: vk::AccessFlags::TRANSFER_WRITE,
                     dst_access_mask: vk::AccessFlags::SHADER_READ,
@@ -491,8 +532,18 @@ fn main() {
                     },
                     ..Default::default()
                 };
+
+                let buffer_barrier_end = vk::BufferMemoryBarrier {
+                    src_access_mask: vk::AccessFlags::TRANSFER_WRITE,
+                    dst_access_mask: vk::AccessFlags::INDEX_READ,
+                    buffer: index_buffer_gpu,
+                    offset: 0,
+                    size: buffer_copy_regions.size,
+                    ..Default::default()
+                };
+
                 device.cmd_pipeline_barrier(
-                    texture_command_buffer,
+                    setup_command_buffer,
                     vk::PipelineStageFlags::TRANSFER,
                     vk::PipelineStageFlags::FRAGMENT_SHADER,
                     vk::DependencyFlags::empty(),
@@ -1049,7 +1100,7 @@ fn main() {
                                     );*/
                                     device.cmd_bind_index_buffer(
                                         draw_command_buffer,
-                                        index_buffer,
+                                        index_buffer_gpu,
                                         0,
                                         vk::IndexType::UINT32,
                                     );
@@ -1143,6 +1194,8 @@ fn main() {
         base.device.destroy_image(texture_image, None);
         base.device.free_memory(index_buffer_memory, None);
         base.device.destroy_buffer(index_buffer, None);
+        base.device.free_memory(index_buffer_gpu_memory, None);
+        base.device.destroy_buffer(index_buffer_gpu, None);
         base.device.free_memory(uniform_buffer_memory, None);
         base.device.destroy_buffer(uniform_buffer, None);
         base.device.free_memory(instances_buffer_memory, None);

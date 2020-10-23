@@ -57,7 +57,7 @@ void main() {
     ray_dir *= ubo.volume_scale.xyz;
     float d = 0;
     bool discarded = false;
-    while (true) {
+    for (uint i=0; i<512; ++i) {
         vec3 uvw = ray_pos + ray_dir * d;
         if (outside(uvw)) {
             discarded = true;
@@ -67,7 +67,7 @@ void main() {
         float s = texture(samplerColor, uvw).x;
         s = s * 2.0 - 1.0;
         d += s;
-        if (s < 0.0001) break;
+        if (s < 0.0002) break;
     }
 
     if (discarded) {
