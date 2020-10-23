@@ -46,9 +46,9 @@ fn main() {
             AxisFlip::PositiveY,
         );
         let sdf = downsample_2x2_sdf(&sdf);
-        //let sdf = downsample_2x2_sdf(&sdf);
-        //let sdf = downsample_2x2_sdf(&sdf);
-        //let sdf = downsample_2x2_sdf(&sdf);
+        let sdf = downsample_2x2_sdf(&sdf);
+        let sdf = downsample_2x2_sdf(&sdf);
+        let sdf = downsample_2x2_sdf(&sdf);
         //let sdf = downsample_2x2_sdf(&sdf);
 
         let dx = sdf.header.dx;
@@ -533,6 +533,16 @@ fn main() {
                     ..Default::default()
                 };
 
+                device.cmd_pipeline_barrier(
+                    setup_command_buffer,
+                    vk::PipelineStageFlags::TRANSFER,
+                    vk::PipelineStageFlags::FRAGMENT_SHADER,
+                    vk::DependencyFlags::empty(),
+                    &[],
+                    &[],
+                    &[texture_barrier_end],
+                );
+
                 let buffer_barrier_end = vk::BufferMemoryBarrier {
                     src_access_mask: vk::AccessFlags::TRANSFER_WRITE,
                     dst_access_mask: vk::AccessFlags::INDEX_READ,
@@ -545,11 +555,11 @@ fn main() {
                 device.cmd_pipeline_barrier(
                     setup_command_buffer,
                     vk::PipelineStageFlags::TRANSFER,
-                    vk::PipelineStageFlags::FRAGMENT_SHADER,
+                    vk::PipelineStageFlags::VERTEX_INPUT,
                     vk::DependencyFlags::empty(),
                     &[],
+                    &[buffer_barrier_end],
                     &[],
-                    &[texture_barrier_end],
                 );
             },
         );
