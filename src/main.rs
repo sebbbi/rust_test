@@ -9,6 +9,7 @@ use std::ffi::CString;
 use std::io::Cursor;
 use std::mem::{self, align_of};
 use std::os::raw::c_void;
+use std::slice::from_raw_parts_mut;
 use std::time::Instant;
 
 use ash::util::*;
@@ -45,14 +46,25 @@ fn main() {
             AxisFlip::PositiveZ,
             AxisFlip::PositiveY,
         );
-        let sdf = downsample_2x2_sdf(&sdf);
-        let sdf = downsample_2x2_sdf(&sdf);
-        let sdf = downsample_2x2_sdf(&sdf);
-        let sdf = downsample_2x2_sdf(&sdf);
-        let sdf = downsample_2x2_sdf(&sdf);
 
-        let dx = sdf.header.dx;
-        let dim = sdf.header.dim;
+        struct SdfLevel {
+            pub sdf: Sdf,
+            pub offset: u32,
+        }
+
+        const SDF_LEVELS: u32 = 6;
+        let mut sdf_levels = Vec::new();
+        let mut sdf_total_voxels = sdf.header.dim.0 * sdf.header.dim.1 * sdf.header.dim.2;
+        sdf_levels.push(SdfLevel { sdf, offset: 0 } );
+        for _ in 1..SDF_LEVELS {
+            let sdf = downsample_2x2_sdf(&sdf_levels.last().unwrap().sdf);
+            let offset = sdf_total_voxels;
+            sdf_total_voxels += sdf.header.dim.0 * sdf.header.dim.1 * sdf.header.dim.2;
+            sdf_levels.push(SdfLevel { sdf, offset } );
+        }
+
+        let dx = sdf_levels[0].sdf.header.dx;
+        let dim = sdf_levels[0].sdf.header.dim;
 
         let diagonal = Vec3 {
             x: dx * dim.0 as f32,
@@ -73,7 +85,6 @@ fn main() {
 
         /*
         let tile_size = 16;
-        let dim = sdf.header.dim;
         let stride_y = dim.0;
         let stride_z = dim.0 * dim.1;
         let level_zero = (65536 / 2) as u16;
@@ -211,7 +222,7 @@ fn main() {
 
         let index_buffer_info = vk::BufferCreateInfo {
             size: std::mem::size_of_val(&index_buffer_data[..]) as u64,
-            usage: vk::BufferUsageFlags::INDEX_BUFFER,
+            usage: vk::BufferUsageFlags::TRANSFER_SRC,
             sharing_mode: vk::SharingMode::EXCLUSIVE,
             ..Default::default()
         };
@@ -250,6 +261,37 @@ fn main() {
         base.device.unmap_memory(index_buffer_memory);
         base.device
             .bind_buffer_memory(index_buffer, index_buffer_memory, 0)
+            .unwrap();
+
+        let index_buffer_gpu_info = vk::BufferCreateInfo {
+            size: std::mem::size_of_val(&index_buffer_data[..]) as u64,
+            usage: vk::BufferUsageFlags::TRANSFER_DST | vk::BufferUsageFlags::INDEX_BUFFER,
+            sharing_mode: vk::SharingMode::EXCLUSIVE,
+            ..Default::default()
+        };
+        let index_buffer_gpu = base
+            .device
+            .create_buffer(&index_buffer_gpu_info, None)
+            .unwrap();
+        let index_buffer_gpu_memory_req =
+            base.device.get_buffer_memory_requirements(index_buffer_gpu);
+        let index_buffer_gpu_memory_index = find_memorytype_index(
+            &index_buffer_gpu_memory_req,
+            &base.device_memory_properties,
+            vk::MemoryPropertyFlags::DEVICE_LOCAL,
+        )
+        .expect("Unable to find suitable memorytype for the index buffer.");
+        let index_allocate_info = vk::MemoryAllocateInfo {
+            allocation_size: index_buffer_gpu_memory_req.size,
+            memory_type_index: index_buffer_gpu_memory_index,
+            ..Default::default()
+        };
+        let index_buffer_gpu_memory = base
+            .device
+            .allocate_memory(&index_allocate_info, None)
+            .unwrap();
+        base.device
+            .bind_buffer_memory(index_buffer_gpu, index_buffer_gpu_memory, 0)
             .unwrap();
 
         const NUM_INSTANCES: usize = 1024 * 1024;
@@ -342,10 +384,8 @@ fn main() {
             .bind_buffer_memory(uniform_buffer, uniform_buffer_memory, 0)
             .unwrap();
 
-        let image_dimensions = sdf.header.dim;
-        let image_data = sdf.voxels;
         let image_buffer_info = vk::BufferCreateInfo {
-            size: (std::mem::size_of::<u16>() * image_data.len()) as u64,
+            size: (std::mem::size_of::<u16>() * sdf_total_voxels as usize) as u64,
             usage: vk::BufferUsageFlags::TRANSFER_SRC,
             sharing_mode: vk::SharingMode::EXCLUSIVE,
             ..Default::default()
@@ -377,16 +417,24 @@ fn main() {
                 vk::MemoryMapFlags::empty(),
             )
             .unwrap();
-        let mut image_slice = Align::new(
-            image_ptr,
-            std::mem::align_of::<u8>() as u64,
-            image_buffer_memory_req.size,
-        );
-        image_slice.copy_from_slice(&image_data);
+
+        for level in &sdf_levels {
+            let voxels = level.sdf.voxels.len();
+            let size = std::mem::size_of::<u16>() * voxels as usize;
+            let mut image_slice = Align::new(
+                image_ptr.add(level.offset as usize * std::mem::size_of::<u16>()),
+                std::mem::align_of::<u8>() as u64,
+                size as u64,
+            );
+            image_slice.copy_from_slice(&level.sdf.voxels[..]);
+        }
+
         base.device.unmap_memory(image_buffer_memory);
         base.device
             .bind_buffer_memory(image_buffer, image_buffer_memory, 0)
             .unwrap();
+
+        let image_dimensions = sdf_levels[0].sdf.header.dim;
 
         let texture_create_info = vk::ImageCreateInfo {
             image_type: vk::ImageType::TYPE_3D,
@@ -396,7 +444,7 @@ fn main() {
                 height: image_dimensions.1,
                 depth: image_dimensions.2,
             },
-            mip_levels: 1,
+            mip_levels: sdf_levels.len() as u32,
             array_layers: 1,
             samples: vk::SampleCountFlags::TYPE_1,
             tiling: vk::ImageTiling::OPTIMAL,
@@ -435,21 +483,22 @@ fn main() {
             &[],
             &[],
             &[],
-            |device, texture_command_buffer| {
+            |device, setup_command_buffer| {
                 let texture_barrier = vk::ImageMemoryBarrier {
                     dst_access_mask: vk::AccessFlags::TRANSFER_WRITE,
                     new_layout: vk::ImageLayout::TRANSFER_DST_OPTIMAL,
                     image: texture_image,
                     subresource_range: vk::ImageSubresourceRange {
                         aspect_mask: vk::ImageAspectFlags::COLOR,
-                        level_count: 1,
+                        level_count: sdf_levels.len() as u32,
                         layer_count: 1,
                         ..Default::default()
                     },
                     ..Default::default()
                 };
+
                 device.cmd_pipeline_barrier(
-                    texture_command_buffer,
+                    setup_command_buffer,
                     vk::PipelineStageFlags::BOTTOM_OF_PIPE,
                     vk::PipelineStageFlags::TRANSFER,
                     vk::DependencyFlags::empty(),
@@ -457,26 +506,65 @@ fn main() {
                     &[],
                     &[texture_barrier],
                 );
-                let buffer_copy_regions = vk::BufferImageCopy::builder()
-                    .image_subresource(
-                        vk::ImageSubresourceLayers::builder()
-                            .aspect_mask(vk::ImageAspectFlags::COLOR)
-                            .layer_count(1)
-                            .build(),
-                    )
-                    .image_extent(vk::Extent3D {
-                        width: image_dimensions.0,
-                        height: image_dimensions.1,
-                        depth: image_dimensions.2,
-                    });
+
+                let buffer_copy_regions = vk::BufferCopy {
+                    src_offset: 0,
+                    dst_offset: 0,
+                    size: std::mem::size_of_val(&index_buffer_data[..]) as u64,
+                };
+
+                let buffer_barrier = vk::BufferMemoryBarrier {
+                    dst_access_mask: vk::AccessFlags::TRANSFER_WRITE,
+                    buffer: index_buffer_gpu,
+                    offset: 0,
+                    size: buffer_copy_regions.size,
+                    ..Default::default()
+                };
+
+                device.cmd_pipeline_barrier(
+                    setup_command_buffer,
+                    vk::PipelineStageFlags::BOTTOM_OF_PIPE,
+                    vk::PipelineStageFlags::TRANSFER,
+                    vk::DependencyFlags::empty(),
+                    &[],
+                    &[buffer_barrier],
+                    &[],
+                );
+
+                let image_copys: Vec<vk::BufferImageCopy> =
+                (0..sdf_levels.len()).map(|i| {
+                    let buffer_image_copy_regions = vk::BufferImageCopy::builder()
+                        .buffer_offset(std::mem::size_of::<u16>() as u64 * sdf_levels[i].offset as u64)
+                        .image_subresource(
+                            vk::ImageSubresourceLayers::builder()
+                                .aspect_mask(vk::ImageAspectFlags::COLOR)
+                                .mip_level(i as u32)
+                                .layer_count(1)
+                                .build(),
+                        )
+                        .image_extent(vk::Extent3D {
+                            width: sdf_levels[i].sdf.header.dim.0,
+                            height: sdf_levels[i].sdf.header.dim.1,
+                            depth: sdf_levels[i].sdf.header.dim.2,
+                        });
+                    buffer_image_copy_regions.build()
+                }).collect();
 
                 device.cmd_copy_buffer_to_image(
-                    texture_command_buffer,
+                    setup_command_buffer,
                     image_buffer,
                     texture_image,
                     vk::ImageLayout::TRANSFER_DST_OPTIMAL,
-                    &[buffer_copy_regions.build()],
+                    &image_copys[..],
                 );
+
+                device.cmd_copy_buffer(
+                    setup_command_buffer,
+                    index_buffer,
+                    index_buffer_gpu,
+                    &[buffer_copy_regions],
+                );
+
                 let texture_barrier_end = vk::ImageMemoryBarrier {
                     src_access_mask: vk::AccessFlags::TRANSFER_WRITE,
                     dst_access_mask: vk::AccessFlags::SHADER_READ,
@@ -485,20 +573,40 @@ fn main() {
                     image: texture_image,
                     subresource_range: vk::ImageSubresourceRange {
                         aspect_mask: vk::ImageAspectFlags::COLOR,
-                        level_count: 1,
+                        level_count: sdf_levels.len() as u32,
                         layer_count: 1,
                         ..Default::default()
                     },
                     ..Default::default()
                 };
+
                 device.cmd_pipeline_barrier(
-                    texture_command_buffer,
+                    setup_command_buffer,
                     vk::PipelineStageFlags::TRANSFER,
                     vk::PipelineStageFlags::FRAGMENT_SHADER,
                     vk::DependencyFlags::empty(),
                     &[],
                     &[],
                     &[texture_barrier_end],
+                );
+
+                let buffer_barrier_end = vk::BufferMemoryBarrier {
+                    src_access_mask: vk::AccessFlags::TRANSFER_WRITE,
+                    dst_access_mask: vk::AccessFlags::INDEX_READ,
+                    buffer: index_buffer_gpu,
+                    offset: 0,
+                    size: buffer_copy_regions.size,
+                    ..Default::default()
+                };
+
+                device.cmd_pipeline_barrier(
+                    setup_command_buffer,
+                    vk::PipelineStageFlags::TRANSFER,
+                    vk::PipelineStageFlags::VERTEX_INPUT,
+                    vk::DependencyFlags::empty(),
+                    &[],
+                    &[buffer_barrier_end],
+                    &[],
                 );
             },
         );
@@ -507,12 +615,13 @@ fn main() {
             mag_filter: vk::Filter::LINEAR,
             min_filter: vk::Filter::LINEAR,
             mipmap_mode: vk::SamplerMipmapMode::LINEAR,
-            address_mode_u: vk::SamplerAddressMode::MIRRORED_REPEAT,
-            address_mode_v: vk::SamplerAddressMode::MIRRORED_REPEAT,
-            address_mode_w: vk::SamplerAddressMode::MIRRORED_REPEAT,
+            address_mode_u: vk::SamplerAddressMode::REPEAT,
+            address_mode_v: vk::SamplerAddressMode::REPEAT,
+            address_mode_w: vk::SamplerAddressMode::REPEAT,
             max_anisotropy: 1.0,
             border_color: vk::BorderColor::FLOAT_OPAQUE_WHITE,
             compare_op: vk::CompareOp::NEVER,
+            max_lod: sdf_levels.len() as f32,
             ..Default::default()
         };
 
@@ -529,7 +638,7 @@ fn main() {
             },
             subresource_range: vk::ImageSubresourceRange {
                 aspect_mask: vk::ImageAspectFlags::COLOR,
-                level_count: 1,
+                level_count: sdf_levels.len() as u32,
                 layer_count: 1,
                 ..Default::default()
             },
@@ -1041,15 +1150,9 @@ fn main() {
                                     );
                                     device.cmd_set_viewport(draw_command_buffer, 0, &viewports);
                                     device.cmd_set_scissor(draw_command_buffer, 0, &scissors);
-                                    /*device.cmd_bind_vertex_buffers(
-                                        draw_command_buffer,
-                                        0,
-                                        &[vertex_input_buffer],
-                                        &[0],
-                                    );*/
                                     device.cmd_bind_index_buffer(
                                         draw_command_buffer,
-                                        index_buffer,
+                                        index_buffer_gpu,
                                         0,
                                         vk::IndexType::UINT32,
                                     );
@@ -1061,8 +1164,6 @@ fn main() {
                                         0,
                                         1,
                                     );
-                                    // Or draw without the index buffer
-                                    // device.cmd_draw(draw_command_buffer, 3, 1, 0, 0);
                                     device.cmd_end_render_pass(draw_command_buffer);
                                 },
                             );
@@ -1143,6 +1244,8 @@ fn main() {
         base.device.destroy_image(texture_image, None);
         base.device.free_memory(index_buffer_memory, None);
         base.device.destroy_buffer(index_buffer, None);
+        base.device.free_memory(index_buffer_gpu_memory, None);
+        base.device.destroy_buffer(index_buffer_gpu, None);
         base.device.free_memory(uniform_buffer_memory, None);
         base.device.destroy_buffer(uniform_buffer, None);
         base.device.free_memory(instances_buffer_memory, None);
