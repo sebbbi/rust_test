@@ -45,14 +45,17 @@ fn main() {
             AxisFlip::PositiveZ,
             AxisFlip::PositiveY,
         );
-        let sdf = downsample_2x2_sdf(&sdf);
-        let sdf = downsample_2x2_sdf(&sdf);
-        let sdf = downsample_2x2_sdf(&sdf);
-        let sdf = downsample_2x2_sdf(&sdf);
-        //let sdf = downsample_2x2_sdf(&sdf);
 
-        let dx = sdf.header.dx;
-        let dim = sdf.header.dim;
+        const SDF_LEVELS: u32 = 6;
+        let mut sdf_levels = Vec::new();
+        sdf_levels.push(sdf);
+        for _ in 1..SDF_LEVELS {
+            let sdf = downsample_2x2_sdf(&sdf_levels.last().unwrap());
+            sdf_levels.push(sdf);
+        };
+
+        let dx = sdf_levels[3].header.dx;
+        let dim = sdf_levels[3].header.dim;
 
         let diagonal = Vec3 {
             x: dx * dim.0 as f32,
@@ -73,7 +76,6 @@ fn main() {
 
         /*
         let tile_size = 16;
-        let dim = sdf.header.dim;
         let stride_y = dim.0;
         let stride_z = dim.0 * dim.1;
         let level_zero = (65536 / 2) as u16;
@@ -369,8 +371,8 @@ fn main() {
             .bind_buffer_memory(uniform_buffer, uniform_buffer_memory, 0)
             .unwrap();
 
-        let image_dimensions = sdf.header.dim;
-        let image_data = sdf.voxels;
+        let image_dimensions = sdf_levels[3].header.dim;
+        let image_data = &sdf_levels[3].voxels;
         let image_buffer_info = vk::BufferCreateInfo {
             size: (std::mem::size_of::<u16>() * image_data.len()) as u64,
             usage: vk::BufferUsageFlags::TRANSFER_SRC,

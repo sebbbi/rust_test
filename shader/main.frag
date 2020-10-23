@@ -56,11 +56,9 @@ void main() {
     vec3 ray_dir = normalize(o_local_pos - o_local_camera_pos);
     ray_dir *= ubo.volume_scale.xyz;
     float d = 0;
-    bool discarded = false;
     for (uint i=0; i<512; ++i) {
         vec3 uvw = ray_pos + ray_dir * d;
         if (outside(uvw)) {
-            discarded = true;
             discard;
             break;
         }
@@ -69,12 +67,5 @@ void main() {
         d += s;
         if (s < 0.0002) break;
     }
-
-    if (discarded) {
-        uFragColor = vec4(1.0, 0.0, 0.0, 1.0);
-    }
-    else {
-        uFragColor = vec4(normal(ray_pos + ray_dir * d), 1.0);
-        //uFragColor = vec4(0.0, 0.0, 1.0, 1.0) + ubo.color * d;
-    }
+    uFragColor = vec4(normal(ray_pos + ray_dir * d), 1.0);
 }
