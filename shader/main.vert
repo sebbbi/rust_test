@@ -27,7 +27,7 @@ layout(std140, binding = 1) buffer Instances
 layout (binding = 2) uniform sampler3D samplerColor;
 
 layout (location = 0) out vec3 o_uvw;
-layout (location = 1) out vec3 o_local_camera_pos;
+layout (location = 1) out vec4 o_local_camera_pos_lod;
 layout (location = 2) out vec3 o_local_pos;
 
 void main() {
@@ -42,8 +42,10 @@ void main() {
     vec3 local_pos = pos.xyz * ubo.center_to_edge.xyz;
     vec3 local_camera_pos = ubo.camera_position.xyz - instance_pos;
 
+    float lod = 0.5 * log2(dot(local_camera_pos, local_camera_pos)) - 5.0;
+
     o_uvw = uvw;
     o_local_pos = local_pos;
-    o_local_camera_pos = local_camera_pos;
+    o_local_camera_pos_lod = vec4(local_camera_pos, lod);
     gl_Position = ubo.world_to_screen * vec4(local_pos + instance_pos, 1.0);
 }

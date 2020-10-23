@@ -621,6 +621,7 @@ fn main() {
             max_anisotropy: 1.0,
             border_color: vk::BorderColor::FLOAT_OPAQUE_WHITE,
             compare_op: vk::CompareOp::NEVER,
+            min_lod: 0.0,
             max_lod: sdf_levels.len() as f32,
             ..Default::default()
         };
