@@ -175,7 +175,7 @@ pub fn downsample_2x2_sdf(sdf: &Sdf) -> Sdf {
     let stride_write_y = x_dim as u32;
     let stride_write_z = (x_dim * y_dim) as u32;
 
-    let mut voxels = vec![0; sdf.voxels.len() / 8];
+    let mut voxels = vec![0; (x_dim * y_dim * z_dim) as usize];
     for z in 0..z_dim {
         for y in 0..y_dim {
             for x in 0..x_dim {

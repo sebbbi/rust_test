@@ -62,7 +62,7 @@ void main() {
             discard;
             break;
         }
-        float s = texture(samplerColor, uvw).x;
+        float s = textureLod(samplerColor, uvw, 4.0).x;
         s = s * 2.0 - 1.0;
         d += s;
         if (s < 0.0002) break;
