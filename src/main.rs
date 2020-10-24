@@ -47,6 +47,8 @@ fn main() {
             AxisFlip::PositiveY,
         );
 
+        //store_sdf("data/ganymede-and-jupiter2.sdf", &sdf);
+
         struct SdfLevel {
             pub sdf: Sdf,
             pub offset: u32,

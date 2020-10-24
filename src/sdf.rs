@@ -95,6 +95,66 @@ pub fn load_sdf(filename: &str) -> io::Result<Sdf> {
     Ok(sdf)
 }
 
+struct Storer {
+    offset: usize,
+}
+
+impl Storer {
+    pub fn new() -> Storer {
+        Storer { offset: 0 }
+    }
+
+    pub fn store_u16(&mut self, bytes: &mut [u8], v: u16) {
+        bytes[self.offset..self.offset + 2].copy_from_slice(&v.to_le_bytes()[..]);
+        self.offset += 2;
+    }
+
+    pub fn store_u32(&mut self, bytes: &mut [u8], v: u32) {
+        bytes[self.offset..self.offset + 4].copy_from_slice(&v.to_le_bytes()[..]);
+        self.offset += 4;
+    }
+
+    pub fn store_f32(&mut self, bytes: &mut [u8], v: f32) {
+        bytes[self.offset..self.offset + 4].copy_from_slice(&v.to_le_bytes()[..]);
+        self.offset += 4;
+    }
+
+    pub fn store_array_u16(&mut self, bytes: &mut [u8], src: &[u16]) {
+        for v in src {
+            bytes[self.offset..self.offset + 2].copy_from_slice(&v.to_le_bytes()[..]);
+            self.offset += 2;        
+		}
+    }
+
+    pub fn load_array_f32(&mut self, bytes: &mut [u8], src: &[f32]) {
+        for v in src {
+            bytes[self.offset..self.offset + 4].copy_from_slice(&v.to_le_bytes()[..]);
+            self.offset += 4;        
+		}
+    }
+}
+
+pub fn store_sdf(filename: &str, sdf: &Sdf) -> io::Result<()>  {
+    let byte_count = sdf.voxels.len() as usize * std::mem::size_of::<u16>() + std::mem::size_of::<SdfHeader>();
+    let mut bytes = vec![0u8; byte_count];
+
+    let mut storer = Storer::new();
+
+    storer.store_u32(&mut bytes[..], sdf.header.dim.0);
+    storer.store_u32(&mut bytes[..], sdf.header.dim.1);
+    storer.store_u32(&mut bytes[..], sdf.header.dim.2);
+    storer.store_f32(&mut bytes[..], sdf.header.box_min.0);
+    storer.store_f32(&mut bytes[..], sdf.header.box_min.1);
+    storer.store_f32(&mut bytes[..], sdf.header.box_min.2);
+    storer.store_f32(&mut bytes[..], sdf.header.dx);
+        
+    storer.store_array_u16(&mut bytes[..], &sdf.voxels[..]);
+
+    std::fs::write(filename, bytes)?;
+
+    Ok(())
+}
+
 pub enum AxisFlip {
     PositiveX,
     NegativeX,
