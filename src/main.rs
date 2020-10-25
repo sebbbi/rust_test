@@ -39,7 +39,9 @@ struct Vertex {
 
 fn main() {
     unsafe {
-        let sdf = load_sdf("data/ganymede-and-jupiter.sdf").expect("SDF loading failed");
+        let sdf = load_sdf_zlib("data/ganymede-and-jupiter2.sdf").expect("SDF loading failed");
+
+        /*
         let sdf = orient_sdf(
             &sdf,
             AxisFlip::PositiveX,
@@ -47,9 +49,8 @@ fn main() {
             AxisFlip::PositiveY,
         );
 
-        let sdf = compress_sdf(&sdf);
-        store_sdf("data/ganymede-and-jupiter2.sdf", &sdf);
-        let sdf = decompress_sdf(&sdf);
+        store_sdf_zlib("data/ganymede-and-jupiter2.sdf", &sdf);
+        */
 
         struct SdfLevel {
             pub sdf: Sdf,

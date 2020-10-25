@@ -1,3 +1,8 @@
+extern crate miniz_oxide;
+
+use miniz_oxide::inflate::decompress_to_vec;
+use miniz_oxide::deflate::compress_to_vec;
+
 use std::convert::TryInto;
 use std::fs::File;
 use std::io;
@@ -66,6 +71,36 @@ impl Loader {
     }
 }
 
+pub fn load_sdf_zlib(filename: &str) -> io::Result<Sdf> {
+    let bytes = std::fs::read(filename)?;
+    let bytes = decompress_to_vec(&bytes[..]).expect("Failed to decompress!");
+
+    let mut loader = Loader::new();
+    let header = SdfHeader {
+        dim: (
+            loader.load_u32(&bytes),
+            loader.load_u32(&bytes),
+            loader.load_u32(&bytes),
+        ),
+        box_min: (
+            loader.load_f32(&bytes),
+            loader.load_f32(&bytes),
+            loader.load_f32(&bytes),
+        ),
+        dx: loader.load_f32(&bytes),
+    };
+
+    let count_voxels = header.dim.0 * header.dim.1 * header.dim.2;
+    let voxels = loader.load_array_u16(&bytes, count_voxels as usize);
+
+    println!("Loaded SDF: {:?}", header);
+
+    let sdf = Sdf { header, voxels };
+    let sdf = decompress_postprocess_sdf(&sdf);
+
+    Ok(sdf)
+}
+
 pub fn load_sdf(filename: &str) -> io::Result<Sdf> {
     let bytes = std::fs::read(filename)?;
 
@@ -87,8 +122,7 @@ pub fn load_sdf(filename: &str) -> io::Result<Sdf> {
     let count_voxels = header.dim.0 * header.dim.1 * header.dim.2;
     let voxels = loader.load_array_u16(&bytes, count_voxels as usize);
 
-    println!("Header {:?}", header);
-    println!("Voxels {:?}", voxels[0]);
+    println!("Loaded SDF: {:?}", header);
 
     let sdf = Sdf { header, voxels };
 
@@ -132,6 +166,30 @@ impl Storer {
             self.offset += 4;        
 		}
     }
+}
+
+pub fn store_sdf_zlib(filename: &str, sdf: &Sdf) -> io::Result<()>  {
+    let sdf = compress_preprocess_sdf(&sdf);
+
+    let byte_count = sdf.voxels.len() as usize * std::mem::size_of::<u16>() + std::mem::size_of::<SdfHeader>();
+    let mut bytes = vec![0u8; byte_count];
+
+    let mut storer = Storer::new();
+
+    storer.store_u32(&mut bytes[..], sdf.header.dim.0);
+    storer.store_u32(&mut bytes[..], sdf.header.dim.1);
+    storer.store_u32(&mut bytes[..], sdf.header.dim.2);
+    storer.store_f32(&mut bytes[..], sdf.header.box_min.0);
+    storer.store_f32(&mut bytes[..], sdf.header.box_min.1);
+    storer.store_f32(&mut bytes[..], sdf.header.box_min.2);
+    storer.store_f32(&mut bytes[..], sdf.header.dx);
+        
+    storer.store_array_u16(&mut bytes[..], &sdf.voxels[..]);
+
+    let bytes = compress_to_vec(&bytes[..], 6);
+    std::fs::write(filename, bytes)?;
+
+    Ok(())
 }
 
 pub fn store_sdf(filename: &str, sdf: &Sdf) -> io::Result<()>  {
@@ -290,7 +348,7 @@ pub fn abs_diff_inv(v: u32) -> i32 {
 	}
 }
 
-pub fn compress_sdf(sdf: &Sdf) -> Sdf {
+pub fn compress_preprocess_sdf(sdf: &Sdf) -> Sdf {
     let x_dim = sdf.header.dim.0 as usize;
     let y_dim = sdf.header.dim.1 as usize;
     let z_dim = sdf.header.dim.2 as usize;
@@ -338,7 +396,7 @@ pub fn compress_sdf(sdf: &Sdf) -> Sdf {
     Sdf { header, voxels }
 }
 
-pub fn decompress_sdf(sdf: &Sdf) -> Sdf {
+pub fn decompress_postprocess_sdf(sdf: &Sdf) -> Sdf {
     let x_dim = sdf.header.dim.0 as usize;
     let y_dim = sdf.header.dim.1 as usize;
     let z_dim = sdf.header.dim.2 as usize;
