@@ -47,7 +47,9 @@ fn main() {
             AxisFlip::PositiveY,
         );
 
-        //store_sdf("data/ganymede-and-jupiter2.sdf", &sdf);
+        let sdf = compress_sdf(&sdf);
+        store_sdf("data/ganymede-and-jupiter2.sdf", &sdf);
+        let sdf = decompress_sdf(&sdf);
 
         struct SdfLevel {
             pub sdf: Sdf,
@@ -59,7 +61,7 @@ fn main() {
         let mut sdf_total_voxels = sdf.header.dim.0 * sdf.header.dim.1 * sdf.header.dim.2;
         sdf_levels.push(SdfLevel { sdf, offset: 0 } );
         for _ in 1..SDF_LEVELS {
-            let sdf = downsample_2x2_sdf(&sdf_levels.last().unwrap().sdf);
+            let sdf = downsample_2x_sdf(&sdf_levels.last().unwrap().sdf);
             let offset = sdf_total_voxels;
             sdf_total_voxels += sdf.header.dim.0 * sdf.header.dim.1 * sdf.header.dim.2;
             sdf_levels.push(SdfLevel { sdf, offset } );

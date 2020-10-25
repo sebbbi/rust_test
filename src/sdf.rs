@@ -224,7 +224,7 @@ pub fn orient_sdf(sdf: &Sdf, x_orient: AxisFlip, y_orient: AxisFlip, z_orient: A
     Sdf { header, voxels }
 }
 
-pub fn downsample_2x2_sdf(sdf: &Sdf) -> Sdf {
+pub fn downsample_2x_sdf(sdf: &Sdf) -> Sdf {
     let x_dim = sdf.header.dim.0 / 2;
     let y_dim = sdf.header.dim.1 / 2;
     let z_dim = sdf.header.dim.2 / 2;
@@ -262,6 +262,125 @@ pub fn downsample_2x2_sdf(sdf: &Sdf) -> Sdf {
             0.0, 0.0, 0.0, // Not used
         ),
         dx: sdf.header.dx * 2.0,
+    };
+
+    Sdf { header, voxels }
+}
+
+pub fn abs_diff(v: i32) -> u32 {
+    // Positive: 0,2,4,6...
+    // Negative: 1,3,5,7...
+    if v >= 0 {
+        (v * 2) as u32
+	}
+    else
+    {
+        (-v * 2 - 1) as u32
+	}
+}
+
+pub fn abs_diff_inv(v: u32) -> i32 {
+    // 0,-1,1,-2,2,-3,3...
+    if (v % 2) == 0 {
+        (v / 2) as i32
+	}
+    else
+    {
+        -((v / 2 + 1) as i32)
+	}
+}
+
+pub fn compress_sdf(sdf: &Sdf) -> Sdf {
+    let x_dim = sdf.header.dim.0 as usize;
+    let y_dim = sdf.header.dim.1 as usize;
+    let z_dim = sdf.header.dim.2 as usize;
+
+    let stride_y = (sdf.header.dim.0) as usize;
+    let stride_z = (sdf.header.dim.0 * sdf.header.dim.1) as usize;
+
+    let mut voxels = sdf.voxels.clone();
+
+    // NOTE: Storing x=0, y=0, z=0 slices as is
+    // TODO: 1d gradient estimate for the first y scanline
+    // TODO: 2d gradient estimate for the first z slice
+
+    for z in 1..z_dim {
+        for y in 1..y_dim {
+            for x in 1..x_dim {
+                let addr_base = x + y * stride_y + z * stride_z;
+
+                let dx = sdf.voxels[addr_base - stride_y] as i32 -
+                    sdf.voxels[addr_base - stride_y - 1] as i32;
+
+                let dy = sdf.voxels[addr_base - 1] as i32 -
+                    sdf.voxels[addr_base - stride_y - 1] as i32;
+
+                let dz = sdf.voxels[addr_base - 1] as i32 -
+                    sdf.voxels[addr_base - stride_z - 1] as i32;
+
+                // TODO: Use eikonal equation instead of this simple linear estimate
+                let estimate = sdf.voxels[addr_base - 1] as i32 + dx;
+
+                let v = sdf.voxels[addr_base] as i32;
+                voxels[addr_base] = abs_diff(v - estimate) as u16;
+            }
+        }
+    }
+
+    let header = SdfHeader {
+        dim: (x_dim as u32, y_dim as u32, z_dim as u32),
+        box_min: (
+            0.0, 0.0, 0.0, // Not used
+        ),
+        dx: sdf.header.dx,
+    };
+
+    Sdf { header, voxels }
+}
+
+pub fn decompress_sdf(sdf: &Sdf) -> Sdf {
+    let x_dim = sdf.header.dim.0 as usize;
+    let y_dim = sdf.header.dim.1 as usize;
+    let z_dim = sdf.header.dim.2 as usize;
+
+    let stride_y = (sdf.header.dim.0) as usize;
+    let stride_z = (sdf.header.dim.0 * sdf.header.dim.1) as usize;
+
+    let mut voxels = sdf.voxels.clone();
+
+    // NOTE: Storing x=0, y=0, z=0 slices as is
+    // TODO: 1d gradient estimate for the first y scanline
+    // TODO: 2d gradient estimate for the first z slice
+
+    for z in 1..z_dim {
+        for y in 1..y_dim {
+            for x in 1..x_dim {
+                let addr_base = x + y * stride_y + z * stride_z;
+
+                let dx = voxels[addr_base - stride_y] as i32 -
+                    voxels[addr_base - stride_y - 1] as i32;
+
+                let dy = voxels[addr_base - 1] as i32 -
+                    voxels[addr_base - stride_y - 1] as i32;
+
+                let dz = voxels[addr_base - 1] as i32 -
+                    voxels[addr_base - stride_z - 1] as i32;
+
+                // TODO: Use eikonal equation instead of this simple linear estimate
+                let estimate = voxels[addr_base - 1] as i32 + dx;
+
+                let v = voxels[addr_base] as u32;
+                voxels[addr_base] = (estimate + abs_diff_inv(v)) as u16;
+            }
+        }
+    }
+
+    let header = SdfHeader {
+        dim: (x_dim as u32, y_dim as u32, z_dim as u32),
+        box_min: (
+            0.0, 0.0, 0.0, // Not used
+        ),
+        dx: sdf.header.dx,
     };
 
     Sdf { header, voxels }
