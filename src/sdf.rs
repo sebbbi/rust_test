@@ -325,27 +325,16 @@ pub fn downsample_2x_sdf(sdf: &Sdf) -> Sdf {
     Sdf { header, voxels }
 }
 
+// https://gist.github.com/mfuerstenau/ba870a29e16536fdbaba
 pub fn abs_diff(v: i32) -> u32 {
     // Positive: 0,2,4,6...
     // Negative: 1,3,5,7...
-    if v >= 0 {
-        (v * 2) as u32
-	}
-    else
-    {
-        (-v * 2 - 1) as u32
-	}
+    ((v >> 31) ^ (v << 1)) as u32
 }
 
 pub fn abs_diff_inv(v: u32) -> i32 {
     // 0,-1,1,-2,2,-3,3...
-    if (v % 2) == 0 {
-        (v / 2) as i32
-	}
-    else
-    {
-        -((v / 2 + 1) as i32)
-	}
+    (v >> 1) as i32 ^ -((v & 1) as i32)
 }
 
 pub fn compress_preprocess_sdf(sdf: &Sdf) -> Sdf {

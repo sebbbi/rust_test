@@ -39,7 +39,7 @@ struct Vertex {
 
 fn main() {
     unsafe {
-        let sdf = load_sdf_zlib("data/ganymede-and-jupiter2.sdf").expect("SDF loading failed");
+        let sdf = load_sdf_zlib("data/ganymede-and-jupiter.sdf").expect("SDF loading failed");
 
         /*
         let sdf = orient_sdf(
