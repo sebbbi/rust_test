@@ -3,6 +3,12 @@
 
 extern crate winit;
 
+mod minivector;
+mod sdf;
+mod serialization;
+mod sparse_sdf;
+mod vulkan_base;
+
 use rand::Rng;
 use std::default::Default;
 use std::ffi::CString;
@@ -22,14 +28,9 @@ use winit::{
     window::WindowBuilder,
 };
 
-mod sdf;
-use sdf::*;
-
-mod vulkan_base;
-use vulkan_base::*;
-
-mod minivector;
 use minivector::*;
+use sdf::*;
+use vulkan_base::*;
 
 #[derive(Clone, Debug, Copy)]
 struct Vertex {
@@ -60,12 +61,12 @@ fn main() {
         const SDF_LEVELS: u32 = 6;
         let mut sdf_levels = Vec::new();
         let mut sdf_total_voxels = sdf.header.dim.0 * sdf.header.dim.1 * sdf.header.dim.2;
-        sdf_levels.push(SdfLevel { sdf, offset: 0 } );
+        sdf_levels.push(SdfLevel { sdf, offset: 0 });
         for _ in 1..SDF_LEVELS {
             let sdf = downsample_2x_sdf(&sdf_levels.last().unwrap().sdf);
             let offset = sdf_total_voxels;
             sdf_total_voxels += sdf.header.dim.0 * sdf.header.dim.1 * sdf.header.dim.2;
-            sdf_levels.push(SdfLevel { sdf, offset } );
+            sdf_levels.push(SdfLevel { sdf, offset });
         }
 
         let dx = sdf_levels[0].sdf.header.dx;
@@ -536,24 +537,27 @@ fn main() {
                     &[],
                 );
 
-                let image_copys: Vec<vk::BufferImageCopy> =
-                (0..sdf_levels.len()).map(|i| {
-                    let buffer_image_copy_regions = vk::BufferImageCopy::builder()
-                        .buffer_offset(std::mem::size_of::<u16>() as u64 * sdf_levels[i].offset as u64)
-                        .image_subresource(
-                            vk::ImageSubresourceLayers::builder()
-                                .aspect_mask(vk::ImageAspectFlags::COLOR)
-                                .mip_level(i as u32)
-                                .layer_count(1)
-                                .build(),
-                        )
-                        .image_extent(vk::Extent3D {
-                            width: sdf_levels[i].sdf.header.dim.0,
-                            height: sdf_levels[i].sdf.header.dim.1,
-                            depth: sdf_levels[i].sdf.header.dim.2,
-                        });
-                    buffer_image_copy_regions.build()
-                }).collect();
+                let image_copys: Vec<vk::BufferImageCopy> = (0..sdf_levels.len())
+                    .map(|i| {
+                        let buffer_image_copy_regions = vk::BufferImageCopy::builder()
+                            .buffer_offset(
+                                std::mem::size_of::<u16>() as u64 * sdf_levels[i].offset as u64,
+                            )
+                            .image_subresource(
+                                vk::ImageSubresourceLayers::builder()
+                                    .aspect_mask(vk::ImageAspectFlags::COLOR)
+                                    .mip_level(i as u32)
+                                    .layer_count(1)
+                                    .build(),
+                            )
+                            .image_extent(vk::Extent3D {
+                                width: sdf_levels[i].sdf.header.dim.0,
+                                height: sdf_levels[i].sdf.header.dim.1,
+                                depth: sdf_levels[i].sdf.header.dim.2,
+                            });
+                        buffer_image_copy_regions.build()
+                    })
+                    .collect();
 
                 device.cmd_copy_buffer_to_image(
                     setup_command_buffer,
