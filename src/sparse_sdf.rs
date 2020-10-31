@@ -1,3 +1,9 @@
 pub struct SparseSdf {
-    pub voxels: Vec<u16>,
+    pub data: Vec<u8>,
+}
+
+impl SparseSdf {
+    pub fn AddNode() {
+
+    }
 }

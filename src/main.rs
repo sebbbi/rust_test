@@ -40,6 +40,10 @@ struct Vertex {
 
 fn main() {
     unsafe {
+        const SDF_LEVELS: u32 = 6;
+        const SIMPLE_FRAGMENT_SHADER: bool = false;
+        const CUBE_BACKFACE_OPTIMIZATION: bool = true;
+
         let sdf = load_sdf_zlib("data/ganymede-and-jupiter.sdf").expect("SDF loading failed");
 
         /*
@@ -58,7 +62,6 @@ fn main() {
             pub offset: u32,
         }
 
-        const SDF_LEVELS: u32 = 6;
         let mut sdf_levels = Vec::new();
         let mut sdf_total_voxels = sdf.header.dim.0 * sdf.header.dim.1 * sdf.header.dim.2;
         sdf_levels.push(SdfLevel { sdf, offset: 0 });
@@ -212,8 +215,12 @@ fn main() {
         const NUM_CUBE_VERTICES: u32 = 8;
 
         let cube_indices = [
-            0u32, 2, 1, 2, 3, 1, 2, 6, 3, 6, 7, 3, 7, 1, 3, 7, 5, 1, 5, 4, 1, 1, 4, 0, 0, 4, 6, 0,
-            6, 2, 6, 5, 7, 6, 4, 5,
+            0u32, 2, 1, 2, 3, 1,             
+            5, 4, 1, 1, 4, 0, 
+            0, 4, 6, 0, 6, 2, 
+            6, 5, 7, 6, 4, 5,
+            2, 6, 3, 6, 7, 3, 
+            7, 1, 3, 7, 5, 1, 
         ];
 
         let num_indices = NUM_INSTANCES * cube_indices.len();
@@ -766,8 +773,17 @@ fn main() {
         ];
         base.device.update_descriptor_sets(&write_desc_sets, &[]);
 
-        let mut vertex_spv_file = Cursor::new(&include_bytes!("../shader/main_vert.spv")[..]);
-        let mut frag_spv_file = Cursor::new(&include_bytes!("../shader/main_frag.spv")[..]);
+        let mut vertex_spv_file = if CUBE_BACKFACE_OPTIMIZATION {
+            Cursor::new(&include_bytes!("../shader/main_frontface_vert.spv")[..])
+        } else {
+            Cursor::new(&include_bytes!("../shader/main_vert.spv")[..])
+        };
+
+        let mut frag_spv_file = if SIMPLE_FRAGMENT_SHADER {
+            Cursor::new(&include_bytes!("../shader/simple_frag.spv")[..])
+        } else {
+            Cursor::new(&include_bytes!("../shader/main_frag.spv")[..])
+        };
 
         let vertex_code =
             read_spv(&mut vertex_spv_file).expect("Failed to read vertex shader spv file");
