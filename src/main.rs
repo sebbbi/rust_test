@@ -211,21 +211,25 @@ fn main() {
             })
             .collect();
 
-        const NUM_CUBE_INDICES: u32 = 3 * 6 * 2;
-        const NUM_CUBE_VERTICES: u32 = 8;
+        const NUM_CUBE_INDICES: usize = if CUBE_BACKFACE_OPTIMIZATION {
+            3 * 3 * 2
+        } else {
+            3 * 6 * 2
+        };
+        const NUM_CUBE_VERTICES: usize = 8;
 
         let cube_indices = [
             0u32, 2, 1, 2, 3, 1, 5, 4, 1, 1, 4, 0, 0, 4, 6, 0, 6, 2, 6, 5, 7, 6, 4, 5, 2, 6, 3, 6,
             7, 3, 7, 1, 3, 7, 5, 1,
         ];
 
-        let num_indices = NUM_INSTANCES * cube_indices.len();
+        let num_indices = NUM_INSTANCES * NUM_CUBE_INDICES;
 
         let index_buffer_data: Vec<u32> = (0..num_indices)
             .map(|i| {
-                let cube = i as u32 / NUM_CUBE_INDICES;
-                let cube_local = i as u32 % NUM_CUBE_INDICES;
-                cube_indices[cube_local as usize] + cube * NUM_CUBE_VERTICES
+                let cube = i / NUM_CUBE_INDICES;
+                let cube_local = i % NUM_CUBE_INDICES;
+                cube_indices[cube_local] + cube as u32 * NUM_CUBE_VERTICES as u32
             })
             .collect();
 
@@ -846,7 +850,7 @@ fn main() {
             .viewports(&viewports);
 
         let rasterization_info = vk::PipelineRasterizationStateCreateInfo {
-            cull_mode: vk::CullModeFlags::BACK,
+            cull_mode: vk::CullModeFlags::NONE,
             front_face: vk::FrontFace::COUNTER_CLOCKWISE,
             line_width: 1.0,
             polygon_mode: vk::PolygonMode::FILL,

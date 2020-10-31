@@ -33,14 +33,29 @@ layout (location = 2) out vec3 o_local_pos;
 void main() {
     uint vx = gl_VertexIndex;
     uint instance = vx >> 3;
+
+    vec3 instance_pos = instances[instance].position.xyz;
+    vec3 local_camera_pos = ubo.camera_position.xyz - instance_pos;
+
+    // Backface culling trick: 
+    // Index buffer contains only cube front faces
+    // Mirror faces based on camera looking direction
+//    vx ^=  
+//        (uint(local_camera_pos.y > 0) << 2) |
+//        (uint(local_camera_pos.z > 0) << 1) |
+//        uint(local_camera_pos.x > 0);
+
     uvec3 xyz = uvec3(vx & 0x1, (vx & 0x4) >> 2, (vx & 0x2) >> 1);
+
+    // Backface culling trick: alternative implementation (-1 ALU)
+    if (local_camera_pos.x > 0) xyz.x = 1 - xyz.x;    
+    if (local_camera_pos.y > 0) xyz.y = 1 - xyz.y;
+    if (local_camera_pos.z > 0) xyz.z = 1 - xyz.z;
+
     vec3 uvw = vec3(xyz);
     vec3 pos = uvw * 2.0 - 1.0;
 
-    vec3 instance_pos = instances[instance].position.xyz;
-
     vec3 local_pos = pos.xyz * ubo.center_to_edge.xyz;
-    vec3 local_camera_pos = ubo.camera_position.xyz - instance_pos;
 
     float lod = 0.5 * log2(dot(local_camera_pos, local_camera_pos)) - 5.0;
 
