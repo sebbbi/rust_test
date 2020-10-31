@@ -3,7 +3,5 @@ pub struct SparseSdf {
 }
 
 impl SparseSdf {
-    pub fn AddNode() {
-
-    }
+    pub fn add_node() {}
 }
