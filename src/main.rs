@@ -218,9 +218,14 @@ fn main() {
         };
         const NUM_CUBE_VERTICES: usize = 8;
 
+        #[rustfmt::skip]
         let cube_indices = [
-            0u32, 2, 1, 2, 3, 1, 5, 4, 1, 1, 4, 0, 0, 4, 6, 0, 6, 2, 6, 5, 7, 6, 4, 5, 2, 6, 3, 6,
-            7, 3, 7, 1, 3, 7, 5, 1,
+            0u32, 2, 1, 2, 3, 1,
+            5, 4, 1, 1, 4, 0,
+            0, 4, 6, 0, 6, 2,
+            6, 5, 7, 6, 4, 5,
+            2, 6, 3, 6, 7, 3,
+            7, 1, 3, 7, 5, 1,
         ];
 
         let num_indices = NUM_INSTANCES * NUM_CUBE_INDICES;

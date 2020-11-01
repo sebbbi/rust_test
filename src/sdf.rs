@@ -271,12 +271,8 @@ pub fn compress_preprocess_sdf(sdf: &Sdf) -> Sdf {
 
                 let dx = sdf.voxels[addr_base - stride_y] as i32
                     - sdf.voxels[addr_base - stride_y - 1] as i32;
-
-                let dy =
-                    sdf.voxels[addr_base - 1] as i32 - sdf.voxels[addr_base - stride_y - 1] as i32;
-
-                let dz =
-                    sdf.voxels[addr_base - 1] as i32 - sdf.voxels[addr_base - stride_z - 1] as i32;
+                //let dy = sdf.voxels[addr_base - 1] as i32 - sdf.voxels[addr_base - stride_y - 1] as i32;
+                //let dz = sdf.voxels[addr_base - 1] as i32 - sdf.voxels[addr_base - stride_z - 1] as i32;
 
                 // TODO: Use eikonal equation instead of this simple linear estimate
                 let estimate = sdf.voxels[addr_base - 1] as i32 + dx;
@@ -319,10 +315,8 @@ pub fn decompress_postprocess_sdf(sdf: &Sdf) -> Sdf {
 
                 let dx =
                     voxels[addr_base - stride_y] as i32 - voxels[addr_base - stride_y - 1] as i32;
-
-                let dy = voxels[addr_base - 1] as i32 - voxels[addr_base - stride_y - 1] as i32;
-
-                let dz = voxels[addr_base - 1] as i32 - voxels[addr_base - stride_z - 1] as i32;
+                //let dy = voxels[addr_base - 1] as i32 - voxels[addr_base - stride_y - 1] as i32;
+                //let dz = voxels[addr_base - 1] as i32 - voxels[addr_base - stride_z - 1] as i32;
 
                 // TODO: Use eikonal equation instead of this simple linear estimate
                 let estimate = voxels[addr_base - 1] as i32 + dx;
