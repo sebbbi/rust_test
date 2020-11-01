@@ -1,9 +1,13 @@
 extern crate ash;
 extern crate vk_mem;
 
-use ash::vk;
+pub use ash::version::{DeviceV1_0, EntryV1_0, InstanceV1_0};
+use ash::{vk, Device};
+use ash::util::*;
 use vk_mem::{Allocator, AllocationCreateInfo};
 use std::default::Default;
+use std::os::raw::c_void;
+use std::mem::{self, align_of};
 
 pub struct VkBuffer {
 	pub buffer: vk::Buffer,
@@ -23,6 +27,26 @@ impl VkBuffer {
 
 	pub fn destroy(&self, allocator: &Allocator) {
 		allocator.destroy_buffer(self.buffer, &self.allocation).expect("Buffer destroy failed");
+	}
+
+	pub fn copy_from_slice<T>(&self, device: &Device, slice: &[T]) where T: Copy {
+		unsafe {
+		let index_ptr: *mut c_void = device
+			.map_memory(
+				self.info.get_device_memory(),
+				self.info.get_offset() as u64,
+				self.info.get_size() as u64,
+				vk::MemoryMapFlags::empty(),
+			)
+			.unwrap();
+		let mut index_slice = Align::new(
+			index_ptr,
+			align_of::<u32>() as u64,
+			self.info.get_size() as u64,
+		);
+		index_slice.copy_from_slice(slice);
+		device.unmap_memory(self.info.get_device_memory());
+		}
 	}
 }
 
@@ -46,3 +70,4 @@ impl VkImage {
 		allocator.destroy_image(self.image, &self.allocation).expect("Image destroy failed");
 	}
 }
+

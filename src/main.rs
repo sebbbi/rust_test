@@ -16,7 +16,6 @@ use std::ffi::CString;
 use std::io::Cursor;
 use std::mem::{self, align_of};
 use std::os::raw::c_void;
-use std::slice::from_raw_parts_mut;
 use std::time::Instant;
 
 use ash::util::*;
@@ -276,6 +275,9 @@ fn main() {
             .bind_buffer_memory(index_buffer, index_buffer_memory, 0)
             .unwrap();*/
 
+        index_buffer.copy_from_slice(&base.device, &index_buffer_data[..]);
+
+        /*
         let index_ptr: *mut c_void = base
             .device
             .map_memory(
@@ -291,7 +293,7 @@ fn main() {
             index_buffer.info.get_size() as u64,
         );
         index_slice.copy_from_slice(&index_buffer_data[..]);
-        base.device.unmap_memory(index_buffer.info.get_device_memory());
+        base.device.unmap_memory(index_buffer.info.get_device_memory());*/
 
         let index_buffer_gpu_info = vk::BufferCreateInfo {
             size: std::mem::size_of_val(&index_buffer_data[..]) as u64,
