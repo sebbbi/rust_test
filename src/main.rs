@@ -8,6 +8,7 @@ mod sdf;
 mod serialization;
 mod sparse_sdf;
 mod vulkan_base;
+mod vulkan_helpers;
 
 use rand::Rng;
 use std::default::Default;
