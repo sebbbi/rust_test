@@ -32,6 +32,7 @@ use winit::{
 use minivector::*;
 use sdf::*;
 use vulkan_base::*;
+use vulkan_helpers::*;
 
 #[derive(Clone, Debug, Copy)]
 struct Vertex {
@@ -142,7 +143,7 @@ fn main() {
             .unwrap();
 
         let base = VulkanBase::new(&window, window_width, window_height);
-
+        
         let renderpass_attachments = [
             vk::AttachmentDescription {
                 format: base.surface_format.format,
@@ -245,7 +246,15 @@ fn main() {
             sharing_mode: vk::SharingMode::EXCLUSIVE,
             ..Default::default()
         };
-        let index_buffer = base.device.create_buffer(&index_buffer_info, None).unwrap();
+
+        let alloc_info_gpu = vk_mem::AllocationCreateInfo {
+            usage: vk_mem::MemoryUsage::GpuOnly,
+            ..Default::default()
+        };
+
+        let index_buffer = VkBuffer::new(&base.allocator, &index_buffer_info, &alloc_info_gpu);
+
+        /*let index_buffer = base.device.create_buffer(&index_buffer_info, None).unwrap();
         let index_buffer_memory_req = base.device.get_buffer_memory_requirements(index_buffer);
         let index_buffer_memory_index = find_memorytype_index(
             &index_buffer_memory_req,
@@ -262,25 +271,27 @@ fn main() {
             .device
             .allocate_memory(&index_allocate_info, None)
             .unwrap();
+
+        base.device
+            .bind_buffer_memory(index_buffer, index_buffer_memory, 0)
+            .unwrap();*/
+
         let index_ptr: *mut c_void = base
             .device
             .map_memory(
-                index_buffer_memory,
-                0,
-                index_buffer_memory_req.size,
+                index_buffer.info.get_device_memory(),
+                index_buffer.info.get_offset() as u64,
+                index_buffer.info.get_size() as u64,
                 vk::MemoryMapFlags::empty(),
             )
             .unwrap();
         let mut index_slice = Align::new(
             index_ptr,
             align_of::<u32>() as u64,
-            index_buffer_memory_req.size,
+            index_buffer.info.get_size() as u64,
         );
         index_slice.copy_from_slice(&index_buffer_data[..]);
-        base.device.unmap_memory(index_buffer_memory);
-        base.device
-            .bind_buffer_memory(index_buffer, index_buffer_memory, 0)
-            .unwrap();
+        base.device.unmap_memory(index_buffer.info.get_device_memory());
 
         let index_buffer_gpu_info = vk::BufferCreateInfo {
             size: std::mem::size_of_val(&index_buffer_data[..]) as u64,
@@ -527,9 +538,9 @@ fn main() {
                 );
 
                 let buffer_copy_regions = vk::BufferCopy {
-                    src_offset: 0,
+                    src_offset: index_buffer.info.get_offset() as u64,
                     dst_offset: 0,
-                    size: std::mem::size_of_val(&index_buffer_data[..]) as u64,
+                    size: index_buffer.info.get_size() as u64,
                 };
 
                 let buffer_barrier = vk::BufferMemoryBarrier {
@@ -582,7 +593,7 @@ fn main() {
 
                 device.cmd_copy_buffer(
                     setup_command_buffer,
-                    index_buffer,
+                    index_buffer.buffer,
                     index_buffer_gpu,
                     &[buffer_copy_regions],
                 );
@@ -1274,8 +1285,9 @@ fn main() {
         base.device.free_memory(texture_memory, None);
         base.device.destroy_image_view(tex_image_view, None);
         base.device.destroy_image(texture_image, None);
-        base.device.free_memory(index_buffer_memory, None);
-        base.device.destroy_buffer(index_buffer, None);
+        //base.device.free_memory(index_buffer_memory, None);
+        //base.device.destroy_buffer(index_buffer, None);
+        index_buffer.destroy(&base.allocator);
         base.device.free_memory(index_buffer_gpu_memory, None);
         base.device.destroy_buffer(index_buffer_gpu, None);
         base.device.free_memory(uniform_buffer_memory, None);

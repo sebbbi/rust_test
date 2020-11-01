@@ -12,7 +12,7 @@ pub struct VkBuffer {
 }
 
 impl VkBuffer {
-	fn new(allocator: &vk_mem::Allocator, buffer_info: &vk::BufferCreateInfo, allocation_info: &vk_mem::AllocationCreateInfo) -> VkBuffer {
+	pub fn new(allocator: &vk_mem::Allocator, buffer_info: &vk::BufferCreateInfo, allocation_info: &vk_mem::AllocationCreateInfo) -> VkBuffer {
 		let (buffer, allocation, info) = allocator.create_buffer(buffer_info, allocation_info).expect("Buffer creation failed");
 		VkBuffer {
 			buffer,	
@@ -21,7 +21,7 @@ impl VkBuffer {
 		}
 	}
 
-	fn destroy(&self, allocator: &Allocator) {
+	pub fn destroy(&self, allocator: &Allocator) {
 		allocator.destroy_buffer(self.buffer, &self.allocation).expect("Buffer destroy failed");
 	}
 }
@@ -33,7 +33,7 @@ pub struct VkImage {
 }
 
 impl VkImage {
-	fn new(allocator: &vk_mem::Allocator, image_info: &vk::ImageCreateInfo, allocation_info: &vk_mem::AllocationCreateInfo) -> VkImage {
+	pub fn new(allocator: &vk_mem::Allocator, image_info: &vk::ImageCreateInfo, allocation_info: &vk_mem::AllocationCreateInfo) -> VkImage {
 		let (image, allocation, info) = allocator.create_image(image_info, allocation_info).expect("Image creation failed");
 		VkImage {
 			image,	
@@ -42,10 +42,7 @@ impl VkImage {
 		}
 	}
 
-	fn destroy(&self, allocator: &Allocator) {
+	pub fn destroy(&self, allocator: &Allocator) {
 		allocator.destroy_image(self.image, &self.allocation).expect("Image destroy failed");
 	}
 }
-
-
-

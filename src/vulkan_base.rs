@@ -149,7 +149,7 @@ impl CommandBufferPool {
         }
     }
 
-    pub fn clean_up(&self, device: &Device) {
+    pub fn destroy(&self, device: &Device) {
         unsafe {
             for command_buffer in self.command_buffers.iter() {
                 device.destroy_fence(command_buffer.fence, None);
@@ -190,6 +190,8 @@ pub struct VulkanBase {
     pub rendering_complete_semaphore: vk::Semaphore,
 
     pub command_buffer_pool: CommandBufferPool,
+
+    pub allocator: vk_mem::Allocator,
 }
 
 impl VulkanBase {
@@ -453,6 +455,15 @@ impl VulkanBase {
             let command_buffer_pool =
                 CommandBufferPool::new(&device, queue_family_index, NUM_COMMAND_BUFFERS);
 
+            let allocator_create_info = vk_mem::AllocatorCreateInfo {
+                physical_device: pdevice.clone(),
+                device: device.clone(),
+                instance: instance.clone(),
+                ..Default::default()
+            };
+
+            let allocator = vk_mem::Allocator::new(&allocator_create_info).expect("Allocator creation failed");
+
             let vk = VulkanBase {
                 entry,
                 instance,
@@ -477,6 +488,7 @@ impl VulkanBase {
                 debug_utils_loader,
                 depth_image_memory,
                 command_buffer_pool,
+                allocator,
             };
 
             vk.record_submit_commandbuffer(
@@ -590,7 +602,7 @@ impl Drop for VulkanBase {
             self.device
                 .destroy_semaphore(self.rendering_complete_semaphore, None);
 
-            self.command_buffer_pool.clean_up(&self.device);
+            self.command_buffer_pool.destroy(&self.device);
 
             self.device.free_memory(self.depth_image_memory, None);
             self.device.destroy_image_view(self.depth_image_view, None);
@@ -600,6 +612,9 @@ impl Drop for VulkanBase {
             }
             self.swapchain_loader
                 .destroy_swapchain(self.swapchain, None);
+
+            self.allocator.destroy();
+
             self.device.destroy_device(None);
             self.surface_loader.destroy_surface(self.surface, None);
             self.debug_utils_loader
