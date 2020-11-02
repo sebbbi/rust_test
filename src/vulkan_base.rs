@@ -462,7 +462,8 @@ impl VulkanBase {
                 ..Default::default()
             };
 
-            let allocator = vk_mem::Allocator::new(&allocator_create_info).expect("Allocator creation failed");
+            let allocator =
+                vk_mem::Allocator::new(&allocator_create_info).expect("Allocator creation failed");
 
             let vk = VulkanBase {
                 entry,

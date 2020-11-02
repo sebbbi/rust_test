@@ -42,7 +42,7 @@ struct Vertex {
 fn main() {
     unsafe {
         const SDF_LEVELS: u32 = 6;
-        const SIMPLE_FRAGMENT_SHADER: bool = true;
+        const SIMPLE_FRAGMENT_SHADER: bool = false;
         const CUBE_BACKFACE_OPTIMIZATION: bool = true;
 
         let sdf = load_sdf_zlib("data/ganymede-and-jupiter.sdf").expect("SDF loading failed");
@@ -142,7 +142,7 @@ fn main() {
             .unwrap();
 
         let base = VulkanBase::new(&window, window_width, window_height);
-        
+
         let renderpass_attachments = [
             vk::AttachmentDescription {
                 format: base.surface_format.format,
@@ -212,6 +212,21 @@ fn main() {
             })
             .collect();
 
+        let alloc_info_cpu = vk_mem::AllocationCreateInfo {
+            usage: vk_mem::MemoryUsage::CpuOnly,
+            ..Default::default()
+        };
+
+        let alloc_info_gpu = vk_mem::AllocationCreateInfo {
+            usage: vk_mem::MemoryUsage::GpuOnly,
+            ..Default::default()
+        };
+
+        let alloc_info_cpu_to_gpu = vk_mem::AllocationCreateInfo {
+            usage: vk_mem::MemoryUsage::CpuToGpu,
+            ..Default::default()
+        };
+
         const NUM_CUBE_INDICES: usize = if CUBE_BACKFACE_OPTIMIZATION {
             3 * 3 * 2
         } else {
@@ -246,54 +261,8 @@ fn main() {
             ..Default::default()
         };
 
-        let alloc_info_gpu = vk_mem::AllocationCreateInfo {
-            usage: vk_mem::MemoryUsage::GpuOnly,
-            ..Default::default()
-        };
-
-        let index_buffer = VkBuffer::new(&base.allocator, &index_buffer_info, &alloc_info_gpu);
-
-        /*let index_buffer = base.device.create_buffer(&index_buffer_info, None).unwrap();
-        let index_buffer_memory_req = base.device.get_buffer_memory_requirements(index_buffer);
-        let index_buffer_memory_index = find_memorytype_index(
-            &index_buffer_memory_req,
-            &base.device_memory_properties,
-            vk::MemoryPropertyFlags::HOST_VISIBLE | vk::MemoryPropertyFlags::HOST_COHERENT,
-        )
-        .expect("Unable to find suitable memorytype for the index buffer.");
-        let index_allocate_info = vk::MemoryAllocateInfo {
-            allocation_size: index_buffer_memory_req.size,
-            memory_type_index: index_buffer_memory_index,
-            ..Default::default()
-        };
-        let index_buffer_memory = base
-            .device
-            .allocate_memory(&index_allocate_info, None)
-            .unwrap();
-
-        base.device
-            .bind_buffer_memory(index_buffer, index_buffer_memory, 0)
-            .unwrap();*/
-
+        let index_buffer = VkBuffer::new(&base.allocator, &index_buffer_info, &alloc_info_cpu);
         index_buffer.copy_from_slice(&base.device, &index_buffer_data[..]);
-
-        /*
-        let index_ptr: *mut c_void = base
-            .device
-            .map_memory(
-                index_buffer.info.get_device_memory(),
-                index_buffer.info.get_offset() as u64,
-                index_buffer.info.get_size() as u64,
-                vk::MemoryMapFlags::empty(),
-            )
-            .unwrap();
-        let mut index_slice = Align::new(
-            index_ptr,
-            align_of::<u32>() as u64,
-            index_buffer.info.get_size() as u64,
-        );
-        index_slice.copy_from_slice(&index_buffer_data[..]);
-        base.device.unmap_memory(index_buffer.info.get_device_memory());*/
 
         let index_buffer_gpu_info = vk::BufferCreateInfo {
             size: std::mem::size_of_val(&index_buffer_data[..]) as u64,
@@ -301,30 +270,8 @@ fn main() {
             sharing_mode: vk::SharingMode::EXCLUSIVE,
             ..Default::default()
         };
-        let index_buffer_gpu = base
-            .device
-            .create_buffer(&index_buffer_gpu_info, None)
-            .unwrap();
-        let index_buffer_gpu_memory_req =
-            base.device.get_buffer_memory_requirements(index_buffer_gpu);
-        let index_buffer_gpu_memory_index = find_memorytype_index(
-            &index_buffer_gpu_memory_req,
-            &base.device_memory_properties,
-            vk::MemoryPropertyFlags::DEVICE_LOCAL,
-        )
-        .expect("Unable to find suitable memorytype for the index buffer.");
-        let index_allocate_info = vk::MemoryAllocateInfo {
-            allocation_size: index_buffer_gpu_memory_req.size,
-            memory_type_index: index_buffer_gpu_memory_index,
-            ..Default::default()
-        };
-        let index_buffer_gpu_memory = base
-            .device
-            .allocate_memory(&index_allocate_info, None)
-            .unwrap();
-        base.device
-            .bind_buffer_memory(index_buffer_gpu, index_buffer_gpu_memory, 0)
-            .unwrap();
+
+        let index_buffer_gpu = VkBuffer::new(&base.allocator, &index_buffer_gpu_info, &alloc_info_gpu);
 
         const NUM_INSTANCES: usize = 1024 * 1024;
 
@@ -344,32 +291,9 @@ fn main() {
             sharing_mode: vk::SharingMode::EXCLUSIVE,
             ..Default::default()
         };
-        let instances_buffer = base
-            .device
-            .create_buffer(&instances_buffer_info, None)
-            .unwrap();
-        let instances_buffer_memory_req =
-            base.device.get_buffer_memory_requirements(instances_buffer);
-        let instances_buffer_memory_index = find_memorytype_index(
-            &instances_buffer_memory_req,
-            &base.device_memory_properties,
-            vk::MemoryPropertyFlags::HOST_VISIBLE | vk::MemoryPropertyFlags::HOST_COHERENT,
-        )
-        .expect("Unable to find suitable memorytype for the instances buffer.");
 
-        let instances_buffer_allocate_info = vk::MemoryAllocateInfo {
-            allocation_size: instances_buffer_memory_req.size,
-            memory_type_index: instances_buffer_memory_index,
-            ..Default::default()
-        };
-        let instances_buffer_memory = base
-            .device
-            .allocate_memory(&instances_buffer_allocate_info, None)
-            .unwrap();
-
-        base.device
-            .bind_buffer_memory(instances_buffer, instances_buffer_memory, 0)
-            .unwrap();
+        let instances_buffer = VkBuffer::new(&base.allocator, &instances_buffer_info, &alloc_info_cpu_to_gpu);
+        instances_buffer.copy_from_slice(&base.device, &index_buffer_data[..]);
 
         #[derive(Clone, Debug, Copy)]
         struct Uniforms {
@@ -390,31 +314,8 @@ fn main() {
             sharing_mode: vk::SharingMode::EXCLUSIVE,
             ..Default::default()
         };
-        let uniform_buffer = base
-            .device
-            .create_buffer(&uniform_buffer_info, None)
-            .unwrap();
-        let uniform_buffer_memory_req = base.device.get_buffer_memory_requirements(uniform_buffer);
-        let uniform_buffer_memory_index = find_memorytype_index(
-            &uniform_buffer_memory_req,
-            &base.device_memory_properties,
-            vk::MemoryPropertyFlags::HOST_VISIBLE | vk::MemoryPropertyFlags::HOST_COHERENT,
-        )
-        .expect("Unable to find suitable memorytype for the uniform buffer.");
 
-        let uniform_buffer_allocate_info = vk::MemoryAllocateInfo {
-            allocation_size: uniform_buffer_memory_req.size,
-            memory_type_index: uniform_buffer_memory_index,
-            ..Default::default()
-        };
-        let uniform_buffer_memory = base
-            .device
-            .allocate_memory(&uniform_buffer_allocate_info, None)
-            .unwrap();
-
-        base.device
-            .bind_buffer_memory(uniform_buffer, uniform_buffer_memory, 0)
-            .unwrap();
+        let uniform_buffer = VkBuffer::new(&base.allocator, &uniform_buffer_info, &alloc_info_cpu_to_gpu);
 
         let image_buffer_info = vk::BufferCreateInfo {
             size: (std::mem::size_of::<u16>() * sdf_total_voxels as usize) as u64,
@@ -540,14 +441,14 @@ fn main() {
                 );
 
                 let buffer_copy_regions = vk::BufferCopy {
-                    src_offset: index_buffer.info.get_offset() as u64,
+                    src_offset: 0,
                     dst_offset: 0,
-                    size: index_buffer.info.get_size() as u64,
+                    size: std::mem::size_of_val(&index_buffer_data[..]) as u64,
                 };
 
                 let buffer_barrier = vk::BufferMemoryBarrier {
                     dst_access_mask: vk::AccessFlags::TRANSFER_WRITE,
-                    buffer: index_buffer_gpu,
+                    buffer: index_buffer_gpu.buffer,
                     offset: 0,
                     size: buffer_copy_regions.size,
                     ..Default::default()
@@ -596,7 +497,7 @@ fn main() {
                 device.cmd_copy_buffer(
                     setup_command_buffer,
                     index_buffer.buffer,
-                    index_buffer_gpu,
+                    index_buffer_gpu.buffer,
                     &[buffer_copy_regions],
                 );
 
@@ -628,7 +529,7 @@ fn main() {
                 let buffer_barrier_end = vk::BufferMemoryBarrier {
                     src_access_mask: vk::AccessFlags::TRANSFER_WRITE,
                     dst_access_mask: vk::AccessFlags::INDEX_READ,
-                    buffer: index_buffer_gpu,
+                    buffer: index_buffer_gpu.buffer,
                     offset: 0,
                     size: buffer_copy_regions.size,
                     ..Default::default()
@@ -747,13 +648,13 @@ fn main() {
             .unwrap();
 
         let uniform_buffer_descriptor = vk::DescriptorBufferInfo {
-            buffer: uniform_buffer,
+            buffer: uniform_buffer.buffer,
             offset: 0,
             range: mem::size_of::<Uniforms>() as u64,
         };
 
         let storage_buffer_descriptor = vk::DescriptorBufferInfo {
-            buffer: instances_buffer,
+            buffer: instances_buffer.buffer,
             offset: 0,
             range: mem::size_of::<InstanceDatas>() as u64,
         };
@@ -984,22 +885,7 @@ fn main() {
                 })
                 .collect();
 
-            let instances_ptr = base
-                .device
-                .map_memory(
-                    instances_buffer_memory,
-                    0,
-                    instances_buffer_memory_req.size,
-                    vk::MemoryMapFlags::empty(),
-                )
-                .unwrap();
-            let mut instances_aligned_slice = Align::new(
-                instances_ptr,
-                align_of::<u8>() as u64,
-                instances_buffer_memory_req.size,
-            );
-            instances_aligned_slice.copy_from_slice(&instances_buffer_data[..]);
-            base.device.unmap_memory(instances_buffer_memory);
+            instances_buffer.copy_from_slice(&base.device, &instances_buffer_data[..]);
 
             let mut time_start = Instant::now();
             let mut frame = 0u32;
@@ -1128,22 +1014,7 @@ fn main() {
                                 texel_scale: texel_scale.to_4d(),
                             };
 
-                            let uniform_ptr = base
-                                .device
-                                .map_memory(
-                                    uniform_buffer_memory,
-                                    0,
-                                    uniform_buffer_memory_req.size,
-                                    vk::MemoryMapFlags::empty(),
-                                )
-                                .unwrap();
-                            let mut uniform_aligned_slice = Align::new(
-                                uniform_ptr,
-                                align_of::<Vec4>() as u64,
-                                uniform_buffer_memory_req.size,
-                            );
-                            uniform_aligned_slice.copy_from_slice(&[uniform_buffer_data]);
-                            base.device.unmap_memory(uniform_buffer_memory);
+                            uniform_buffer.copy_from_slice(&base.device, &[uniform_buffer_data]);
 
                             let clear_values = [
                                 vk::ClearValue {
@@ -1197,7 +1068,7 @@ fn main() {
                                     device.cmd_set_scissor(draw_command_buffer, 0, &scissors);
                                     device.cmd_bind_index_buffer(
                                         draw_command_buffer,
-                                        index_buffer_gpu,
+                                        index_buffer_gpu.buffer,
                                         0,
                                         vk::IndexType::UINT32,
                                     );
@@ -1287,15 +1158,10 @@ fn main() {
         base.device.free_memory(texture_memory, None);
         base.device.destroy_image_view(tex_image_view, None);
         base.device.destroy_image(texture_image, None);
-        //base.device.free_memory(index_buffer_memory, None);
-        //base.device.destroy_buffer(index_buffer, None);
         index_buffer.destroy(&base.allocator);
-        base.device.free_memory(index_buffer_gpu_memory, None);
-        base.device.destroy_buffer(index_buffer_gpu, None);
-        base.device.free_memory(uniform_buffer_memory, None);
-        base.device.destroy_buffer(uniform_buffer, None);
-        base.device.free_memory(instances_buffer_memory, None);
-        base.device.destroy_buffer(instances_buffer, None);
+        index_buffer_gpu.destroy(&base.allocator);
+        uniform_buffer.destroy(&base.allocator);
+        instances_buffer.destroy(&base.allocator);
         for &descriptor_set_layout in desc_set_layouts.iter() {
             base.device
                 .destroy_descriptor_set_layout(descriptor_set_layout, None);
