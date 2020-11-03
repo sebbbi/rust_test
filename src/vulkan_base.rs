@@ -456,7 +456,7 @@ impl VulkanBase {
                 CommandBufferPool::new(&device, queue_family_index, NUM_COMMAND_BUFFERS);
 
             let allocator_create_info = vk_mem::AllocatorCreateInfo {
-                physical_device: pdevice.clone(),
+                physical_device: pdevice,
                 device: device.clone(),
                 instance: instance.clone(),
                 ..Default::default()

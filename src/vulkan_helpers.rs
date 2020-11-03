@@ -25,8 +25,6 @@ impl VkBuffer {
             .create_buffer(buffer_info, allocation_info)
             .expect("Buffer creation failed");
 
-        println!("Buffer::new size={} offset={}", info.get_size(), info.get_offset());
-
         VkBuffer {
             buffer,
             allocation,

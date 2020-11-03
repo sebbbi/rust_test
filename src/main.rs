@@ -94,7 +94,7 @@ fn main() {
         let texel_scale = Vec3::from_scalar(1.0) / texels;
 
         /*
-        let tile_size = 16;
+        let tile_size = 8;
         let stride_y = dim.0;
         let stride_z = dim.0 * dim.1;
         let level_zero = (65536 / 2) as u16;
@@ -271,7 +271,8 @@ fn main() {
             ..Default::default()
         };
 
-        let index_buffer_gpu = VkBuffer::new(&base.allocator, &index_buffer_gpu_info, &alloc_info_gpu);
+        let index_buffer_gpu =
+            VkBuffer::new(&base.allocator, &index_buffer_gpu_info, &alloc_info_gpu);
 
         const NUM_INSTANCES: usize = 1024 * 1024;
 
@@ -292,15 +293,16 @@ fn main() {
             ..Default::default()
         };
 
-        let instances_buffer = VkBuffer::new(&base.allocator, &instances_buffer_info, &alloc_info_cpu_to_gpu);
+        let instances_buffer = VkBuffer::new(
+            &base.allocator,
+            &instances_buffer_info,
+            &alloc_info_cpu_to_gpu,
+        );
         instances_buffer.copy_from_slice(&base.device, &index_buffer_data[..]);
 
         #[derive(Clone, Debug, Copy)]
         struct Uniforms {
             world_to_screen: Mat4x4,
-            model_to_world: Mat4x4,
-            world_to_model: Mat4x4,
-            model_to_screen: Mat4x4,
             color: Vec4,
             camera_position: Vec4,
             volume_scale: Vec4,
@@ -310,12 +312,22 @@ fn main() {
 
         let uniform_buffer_info = vk::BufferCreateInfo {
             size: std::mem::size_of::<Uniforms>() as u64,
-            usage: vk::BufferUsageFlags::UNIFORM_BUFFER,
+            usage: vk::BufferUsageFlags::TRANSFER_SRC,
             sharing_mode: vk::SharingMode::EXCLUSIVE,
             ..Default::default()
         };
 
-        let uniform_buffer = VkBuffer::new(&base.allocator, &uniform_buffer_info, &alloc_info_cpu_to_gpu);
+        let uniform_buffer = VkBuffer::new(&base.allocator, &uniform_buffer_info, &alloc_info_cpu);
+
+        let uniform_buffer_gpu_info = vk::BufferCreateInfo {
+            size: std::mem::size_of::<Uniforms>() as u64,
+            usage: vk::BufferUsageFlags::TRANSFER_DST | vk::BufferUsageFlags::UNIFORM_BUFFER,
+            sharing_mode: vk::SharingMode::EXCLUSIVE,
+            ..Default::default()
+        };
+
+        let uniform_buffer_gpu =
+            VkBuffer::new(&base.allocator, &uniform_buffer_gpu_info, &alloc_info_gpu);
 
         let image_buffer_info = vk::BufferCreateInfo {
             size: (std::mem::size_of::<u16>() * sdf_total_voxels as usize) as u64,
@@ -550,7 +562,8 @@ fn main() {
         let sampler_info = vk::SamplerCreateInfo {
             mag_filter: vk::Filter::LINEAR,
             min_filter: vk::Filter::LINEAR,
-            mipmap_mode: vk::SamplerMipmapMode::LINEAR,
+            //mipmap_mode: vk::SamplerMipmapMode::LINEAR,
+            mipmap_mode: vk::SamplerMipmapMode::NEAREST,
             address_mode_u: vk::SamplerAddressMode::REPEAT,
             address_mode_v: vk::SamplerAddressMode::REPEAT,
             address_mode_w: vk::SamplerAddressMode::REPEAT,
@@ -648,7 +661,7 @@ fn main() {
             .unwrap();
 
         let uniform_buffer_descriptor = vk::DescriptorBufferInfo {
-            buffer: uniform_buffer.buffer,
+            buffer: uniform_buffer_gpu.buffer,
             offset: 0,
             range: mem::size_of::<Uniforms>() as u64,
         };
@@ -974,15 +987,6 @@ fn main() {
                                 w: 0.0,
                             };
 
-                            let model_to_world = rot_x_axis(-std::f32::consts::PI / 2.0) // Model from Z-up to Y-up
-                                * rot_y_axis(3.201)
-//                                * rot_y_axis(frame as f32 * 0.001)
-                                * translate(Vec3 {
-                                    x: 0.0, // - 2.0 * (frame as f32 * 0.01).cos(),
-                                    y: 0.0, // + 3.0 * (frame as f32 * 0.01).sin(),
-                                    z: 0.0,
-                                });
-
                             let world_to_screen = view(
                                 camera.position,
                                 camera.direction,
@@ -998,15 +1002,8 @@ fn main() {
                                 10000000.0,
                             );
 
-                            let model_to_screen = model_to_world * world_to_screen;
-
-                            let world_to_model = inverse(model_to_world);
-
                             let uniform_buffer_data = Uniforms {
                                 world_to_screen,
-                                model_to_world,
-                                world_to_model,
-                                model_to_screen,
                                 color,
                                 camera_position: camera.position.to_4d(),
                                 volume_scale: volume_scale.to_4d(),
@@ -1046,6 +1043,56 @@ fn main() {
                                 &[base.present_complete_semaphore],
                                 &[base.rendering_complete_semaphore],
                                 |device, draw_command_buffer| {
+                                    let buffer_copy_regions = vk::BufferCopy {
+                                        src_offset: 0,
+                                        dst_offset: 0,
+                                        size: std::mem::size_of_val(&uniform_buffer_data) as u64,
+                                    };
+
+                                    let buffer_barrier = vk::BufferMemoryBarrier {
+                                        dst_access_mask: vk::AccessFlags::TRANSFER_WRITE,
+                                        buffer: uniform_buffer_gpu.buffer,
+                                        offset: 0,
+                                        size: buffer_copy_regions.size,
+                                        ..Default::default()
+                                    };
+
+                                    device.cmd_pipeline_barrier(
+                                        draw_command_buffer,
+                                        vk::PipelineStageFlags::BOTTOM_OF_PIPE,
+                                        vk::PipelineStageFlags::TRANSFER,
+                                        vk::DependencyFlags::empty(),
+                                        &[],
+                                        &[buffer_barrier],
+                                        &[],
+                                    );
+
+                                    device.cmd_copy_buffer(
+                                        draw_command_buffer,
+                                        uniform_buffer.buffer,
+                                        uniform_buffer_gpu.buffer,
+                                        &[buffer_copy_regions],
+                                    );
+
+                                    let buffer_barrier_end = vk::BufferMemoryBarrier {
+                                        src_access_mask: vk::AccessFlags::TRANSFER_WRITE,
+                                        dst_access_mask: vk::AccessFlags::INDEX_READ,
+                                        buffer: uniform_buffer_gpu.buffer,
+                                        offset: 0,
+                                        size: buffer_copy_regions.size,
+                                        ..Default::default()
+                                    };
+
+                                    device.cmd_pipeline_barrier(
+                                        draw_command_buffer,
+                                        vk::PipelineStageFlags::TRANSFER,
+                                        vk::PipelineStageFlags::VERTEX_INPUT,
+                                        vk::DependencyFlags::empty(),
+                                        &[],
+                                        &[buffer_barrier_end],
+                                        &[],
+                                    );
+
                                     device.cmd_begin_render_pass(
                                         draw_command_buffer,
                                         &render_pass_begin_info,
@@ -1084,7 +1131,6 @@ fn main() {
                                 },
                             );
 
-                            //let mut present_info_err = mem::zeroed();
                             let present_info = vk::PresentInfoKHR {
                                 wait_semaphore_count: 1,
                                 p_wait_semaphores: &base.rendering_complete_semaphore,
@@ -1161,6 +1207,7 @@ fn main() {
         index_buffer.destroy(&base.allocator);
         index_buffer_gpu.destroy(&base.allocator);
         uniform_buffer.destroy(&base.allocator);
+        uniform_buffer_gpu.destroy(&base.allocator);
         instances_buffer.destroy(&base.allocator);
         for &descriptor_set_layout in desc_set_layouts.iter() {
             base.device

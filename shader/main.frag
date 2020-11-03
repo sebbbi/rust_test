@@ -4,9 +4,6 @@
 
 layout (binding = 0) uniform UBO {
     mat4 world_to_screen;
-    mat4 model_to_world;
-    mat4 world_to_model;
-    mat4 model_to_screen;
     vec4 color;
     vec4 camera_position;
     vec4 volume_scale;
@@ -66,7 +63,7 @@ void main() {
         float s = textureLod(samplerColor, uvw, o_local_camera_pos_lod.w).x;
         s = s * 2.0 - 1.0;
         d += s;
-        if (s < 0.0002) break;
+        if (s < 0.00025) break;
     }
     uFragColor = vec4(normal(ray_pos + ray_dir * d), 1.0);
 }

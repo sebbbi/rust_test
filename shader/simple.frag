@@ -4,9 +4,6 @@
 
 layout (binding = 0) uniform UBO {
     mat4 world_to_screen;
-    mat4 model_to_world;
-    mat4 world_to_model;
-    mat4 model_to_screen;
     vec4 color;
     vec4 camera_position;
     vec4 volume_scale;
