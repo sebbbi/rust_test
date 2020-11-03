@@ -335,30 +335,16 @@ fn main() {
             sharing_mode: vk::SharingMode::EXCLUSIVE,
             ..Default::default()
         };
-        let image_buffer = base.device.create_buffer(&image_buffer_info, None).unwrap();
-        let image_buffer_memory_req = base.device.get_buffer_memory_requirements(image_buffer);
-        let image_buffer_memory_index = find_memorytype_index(
-            &image_buffer_memory_req,
-            &base.device_memory_properties,
-            vk::MemoryPropertyFlags::HOST_VISIBLE | vk::MemoryPropertyFlags::HOST_COHERENT,
-        )
-        .expect("Unable to find suitable memorytype for the image buffer.");
 
-        let image_buffer_allocate_info = vk::MemoryAllocateInfo {
-            allocation_size: image_buffer_memory_req.size,
-            memory_type_index: image_buffer_memory_index,
-            ..Default::default()
-        };
-        let image_buffer_memory = base
-            .device
-            .allocate_memory(&image_buffer_allocate_info, None)
-            .unwrap();
+        let image_buffer =
+            VkBuffer::new(&base.allocator, &image_buffer_info, &alloc_info_cpu);
+
         let image_ptr = base
             .device
             .map_memory(
-                image_buffer_memory,
-                0,
-                image_buffer_memory_req.size,
+                image_buffer.info.get_device_memory(),
+                image_buffer.info.get_offset() as u64,
+                image_buffer.info.get_size() as u64,
                 vk::MemoryMapFlags::empty(),
             )
             .unwrap();
@@ -374,10 +360,7 @@ fn main() {
             image_slice.copy_from_slice(&level.sdf.voxels[..]);
         }
 
-        base.device.unmap_memory(image_buffer_memory);
-        base.device
-            .bind_buffer_memory(image_buffer, image_buffer_memory, 0)
-            .unwrap();
+        base.device.unmap_memory(image_buffer.info.get_device_memory());
 
         let image_dimensions = sdf_levels[0].sdf.header.dim;
 
@@ -500,7 +483,7 @@ fn main() {
 
                 device.cmd_copy_buffer_to_image(
                     setup_command_buffer,
-                    image_buffer,
+                    image_buffer.buffer,
                     texture_image,
                     vk::ImageLayout::TRANSFER_DST_OPTIMAL,
                     &image_copys[..],
@@ -1199,11 +1182,10 @@ fn main() {
             .destroy_shader_module(vertex_shader_module, None);
         base.device
             .destroy_shader_module(fragment_shader_module, None);
-        base.device.free_memory(image_buffer_memory, None);
-        base.device.destroy_buffer(image_buffer, None);
         base.device.free_memory(texture_memory, None);
         base.device.destroy_image_view(tex_image_view, None);
         base.device.destroy_image(texture_image, None);
+        image_buffer.destroy(&base.allocator);
         index_buffer.destroy(&base.allocator);
         index_buffer_gpu.destroy(&base.allocator);
         uniform_buffer.destroy(&base.allocator);
