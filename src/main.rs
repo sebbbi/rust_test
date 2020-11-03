@@ -380,30 +380,9 @@ fn main() {
             sharing_mode: vk::SharingMode::EXCLUSIVE,
             ..Default::default()
         };
-        let texture_image = base
-            .device
-            .create_image(&texture_create_info, None)
-            .unwrap();
-        let texture_memory_req = base.device.get_image_memory_requirements(texture_image);
-        let texture_memory_index = find_memorytype_index(
-            &texture_memory_req,
-            &base.device_memory_properties,
-            vk::MemoryPropertyFlags::DEVICE_LOCAL,
-        )
-        .expect("Unable to find suitable memory index for depth image.");
 
-        let texture_allocate_info = vk::MemoryAllocateInfo {
-            allocation_size: texture_memory_req.size,
-            memory_type_index: texture_memory_index,
-            ..Default::default()
-        };
-        let texture_memory = base
-            .device
-            .allocate_memory(&texture_allocate_info, None)
-            .unwrap();
-        base.device
-            .bind_image_memory(texture_image, texture_memory, 0)
-            .expect("Unable to bind depth image memory");
+        let texture_image = 
+            VkImage::new(&base.allocator, &texture_create_info, &alloc_info_gpu);
 
         base.record_submit_commandbuffer(
             0,
@@ -415,7 +394,7 @@ fn main() {
                 let texture_barrier = vk::ImageMemoryBarrier {
                     dst_access_mask: vk::AccessFlags::TRANSFER_WRITE,
                     new_layout: vk::ImageLayout::TRANSFER_DST_OPTIMAL,
-                    image: texture_image,
+                    image: texture_image.image,
                     subresource_range: vk::ImageSubresourceRange {
                         aspect_mask: vk::ImageAspectFlags::COLOR,
                         level_count: sdf_levels.len() as u32,
@@ -484,7 +463,7 @@ fn main() {
                 device.cmd_copy_buffer_to_image(
                     setup_command_buffer,
                     image_buffer.buffer,
-                    texture_image,
+                    texture_image.image,
                     vk::ImageLayout::TRANSFER_DST_OPTIMAL,
                     &image_copys[..],
                 );
@@ -501,7 +480,7 @@ fn main() {
                     dst_access_mask: vk::AccessFlags::SHADER_READ,
                     old_layout: vk::ImageLayout::TRANSFER_DST_OPTIMAL,
                     new_layout: vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL,
-                    image: texture_image,
+                    image: texture_image.image,
                     subresource_range: vk::ImageSubresourceRange {
                         aspect_mask: vk::ImageAspectFlags::COLOR,
                         level_count: sdf_levels.len() as u32,
@@ -575,7 +554,7 @@ fn main() {
                 layer_count: 1,
                 ..Default::default()
             },
-            image: texture_image,
+            image: texture_image.image,
             ..Default::default()
         };
         let tex_image_view = base
@@ -1182,9 +1161,8 @@ fn main() {
             .destroy_shader_module(vertex_shader_module, None);
         base.device
             .destroy_shader_module(fragment_shader_module, None);
-        base.device.free_memory(texture_memory, None);
         base.device.destroy_image_view(tex_image_view, None);
-        base.device.destroy_image(texture_image, None);
+        texture_image.destroy(&base.allocator);
         image_buffer.destroy(&base.allocator);
         index_buffer.destroy(&base.allocator);
         index_buffer_gpu.destroy(&base.allocator);
