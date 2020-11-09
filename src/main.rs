@@ -1,4 +1,3 @@
-#![allow(unused_imports)]
 #![allow(dead_code)]
 
 extern crate winit;
@@ -14,8 +13,7 @@ use rand::Rng;
 use std::default::Default;
 use std::ffi::CString;
 use std::io::Cursor;
-use std::mem::{self, align_of};
-use std::os::raw::c_void;
+use std::mem;
 use std::time::Instant;
 
 use ash::util::*;

@@ -3,11 +3,7 @@ use miniz_oxide::deflate::compress_to_vec;
 use miniz_oxide::inflate::decompress_to_vec;
 
 use crate::serialization::*;
-
-use std::fs::File;
 use std::io;
-use std::io::prelude::*;
-use std::io::Read;
 
 #[derive(Clone, Debug, Copy)]
 pub struct SdfHeader {

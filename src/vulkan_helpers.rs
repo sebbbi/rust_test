@@ -4,10 +4,9 @@ extern crate vk_mem;
 use ash::util::*;
 pub use ash::version::{DeviceV1_0, EntryV1_0, InstanceV1_0};
 use ash::{vk, Device};
-use std::default::Default;
-use std::mem::{self, align_of};
+use std::mem::align_of;
 use std::os::raw::c_void;
-use vk_mem::{AllocationCreateInfo, Allocator};
+use vk_mem::Allocator;
 
 pub struct VkBuffer {
     pub buffer: vk::Buffer,
