@@ -38,25 +38,25 @@ impl VkBuffer {
             .expect("Buffer destroy failed");
     }
 
-    pub fn copy_from_slice<T>(&self, device: &Device, slice: &[T])
+    pub fn copy_from_slice<T>(&self, device: &Device, slice: &[T], offset: u64)
     where
         T: Copy,
     {
         unsafe {
-            let index_ptr: *mut c_void = device
+            let mem_ptr: *mut c_void = device
                 .map_memory(
                     self.info.get_device_memory(),
-                    self.info.get_offset() as u64,
-                    self.info.get_size() as u64,
+                    self.info.get_offset() as u64 + offset,
+                    std::mem::size_of_val(slice) as u64,
                     vk::MemoryMapFlags::empty(),
                 )
                 .unwrap();
-            let mut index_slice = Align::new(
-                index_ptr,
+            let mut mem_slice = Align::new(
+                mem_ptr,
                 align_of::<u32>() as u64,
-                self.info.get_size() as u64,
+                std::mem::size_of_val(slice) as u64,
             );
-            index_slice.copy_from_slice(slice);
+            mem_slice.copy_from_slice(slice);
             device.unmap_memory(self.info.get_device_memory());
         }
     }

@@ -262,7 +262,7 @@ fn main() {
         };
 
         let index_buffer = VkBuffer::new(&base.allocator, &index_buffer_info, &alloc_info_cpu);
-        index_buffer.copy_from_slice(&base.device, &index_buffer_data[..]);
+        index_buffer.copy_from_slice(&base.device, &index_buffer_data[..], 0);
 
         let index_buffer_gpu_info = vk::BufferCreateInfo {
             size: std::mem::size_of_val(&index_buffer_data[..]) as u64,
@@ -298,7 +298,7 @@ fn main() {
             &instances_buffer_info,
             &alloc_info_cpu_to_gpu,
         );
-        instances_buffer.copy_from_slice(&base.device, &index_buffer_data[..]);
+        instances_buffer.copy_from_slice(&base.device, &index_buffer_data[..], 0);
 
         #[derive(Clone, Debug, Copy)]
         struct Uniforms {
@@ -336,8 +336,7 @@ fn main() {
             ..Default::default()
         };
 
-        let image_buffer =
-            VkBuffer::new(&base.allocator, &image_buffer_info, &alloc_info_cpu);
+        let image_buffer = VkBuffer::new(&base.allocator, &image_buffer_info, &alloc_info_cpu);
 
         let image_ptr = base
             .device
@@ -360,7 +359,8 @@ fn main() {
             image_slice.copy_from_slice(&level.sdf.voxels[..]);
         }
 
-        base.device.unmap_memory(image_buffer.info.get_device_memory());
+        base.device
+            .unmap_memory(image_buffer.info.get_device_memory());
 
         let image_dimensions = sdf_levels[0].sdf.header.dim;
 
@@ -381,8 +381,7 @@ fn main() {
             ..Default::default()
         };
 
-        let texture_image = 
-            VkImage::new(&base.allocator, &texture_create_info, &alloc_info_gpu);
+        let texture_image = VkImage::new(&base.allocator, &texture_create_info, &alloc_info_gpu);
 
         base.record_submit_commandbuffer(
             0,
@@ -521,6 +520,7 @@ fn main() {
             },
         );
 
+        // LINEAR mipmap sampling for 3d textures is 1/2 rate
         let sampler_info = vk::SamplerCreateInfo {
             mag_filter: vk::Filter::LINEAR,
             min_filter: vk::Filter::LINEAR,
@@ -814,345 +814,326 @@ fn main() {
 
         let graphic_pipeline = graphics_pipelines[0];
 
-        {
-            struct Application {
-                is_left_clicked: bool,
-                cursor_position: (i32, i32),
-                cursor_delta: Option<(i32, i32)>,
-                wheel_delta: Option<f32>,
-            };
+        struct Inputs {
+            is_left_clicked: bool,
+            cursor_position: (i32, i32),
+            cursor_delta: Option<(i32, i32)>,
+            wheel_delta: Option<f32>,
+        };
 
-            let mut app = Application {
-                is_left_clicked: false,
-                cursor_position: (0, 0),
-                cursor_delta: None,
-                wheel_delta: None,
-            };
+        let mut inputs = Inputs {
+            is_left_clicked: false,
+            cursor_position: (0, 0),
+            cursor_delta: None,
+            wheel_delta: None,
+        };
 
-            struct Camera {
-                position: Vec3,
-                direction: Vec3,
-            };
+        struct Camera {
+            position: Vec3,
+            direction: Vec3,
+        };
 
-            let mut camera = Camera {
-                position: Vec3 {
-                    x: 0.0,
-                    y: 25.0,
-                    z: 50.0,
+        let mut camera = Camera {
+            position: Vec3 {
+                x: 0.0,
+                y: 25.0,
+                z: 50.0,
+            },
+            direction: Vec3 {
+                x: 0.0,
+                y: -0.5,
+                z: -1.0,
+            },
+        };
+
+        // Random cloud of SDF box instances
+        let mut rng = rand::thread_rng();
+
+        let instances_buffer_data: Vec<InstanceData> = (0..NUM_INSTANCES)
+            .map(|_i| InstanceData {
+                position: Vec4 {
+                    x: rng.gen_range(-8000.0, 8000.0),
+                    y: rng.gen_range(-8000.0, 8000.0),
+                    z: rng.gen_range(-8000.0, 8000.0),
+                    w: 1.0,
                 },
-                direction: Vec3 {
-                    x: 0.0,
-                    y: -0.5,
-                    z: -1.0,
-                },
-            };
+            })
+            .collect();
 
-            let mut rng = rand::thread_rng();
+        instances_buffer.copy_from_slice(&base.device, &instances_buffer_data[..], 0);
 
-            let instances_buffer_data: Vec<InstanceData> = (0..NUM_INSTANCES)
-                .map(|_i| InstanceData {
-                    position: Vec4 {
-                        x: rng.gen_range(-8000.0, 8000.0),
-                        y: rng.gen_range(-8000.0, 8000.0),
-                        z: rng.gen_range(-8000.0, 8000.0),
-                        w: 1.0,
-                    },
-                })
-                .collect();
+        let mut time_start = Instant::now();
+        let mut frame = 0u32;
+        let mut active_command_buffer = 0;
 
-            instances_buffer.copy_from_slice(&base.device, &instances_buffer_data[..]);
+        // Used to accumutate input events for a frame
+        let mut is_left_clicked = None;
+        let mut cursor_position = None;
+        let mut last_position = inputs.cursor_position;
+        let mut wheel_delta = None;
+        let mut dirty_swapchain = false;
 
-            let mut time_start = Instant::now();
-            let mut frame = 0u32;
-            let mut active_command_buffer = 0;
+        println!("Start event loop");
 
-            // Used to accumutate input events from the start to the end of a frame
-            let mut is_left_clicked = None;
-            let mut cursor_position = None;
-            let mut last_position = app.cursor_position;
-            let mut wheel_delta = None;
-            let mut dirty_swapchain = false;
+        events_loop.run_return(|event, _, control_flow| {
+            *control_flow = ControlFlow::Poll;
 
-            println!("Start event loop");
+            match event {
+                Event::NewEvents(_) => {
+                    // Reset input states on new frame
+                    is_left_clicked = None;
+                    cursor_position = None;
+                    last_position = inputs.cursor_position;
+                    wheel_delta = None;
+                }
+                Event::MainEventsCleared => {
+                    // Update input state after accumulating event
+                    if let Some(is_left_clicked) = is_left_clicked {
+                        inputs.is_left_clicked = is_left_clicked;
+                    }
+                    if let Some(position) = cursor_position {
+                        inputs.cursor_position = position;
+                        inputs.cursor_delta =
+                            Some((position.0 - last_position.0, position.1 - last_position.1));
+                    } else {
+                        inputs.cursor_delta = None;
+                    }
+                    inputs.wheel_delta = wheel_delta;
 
-            events_loop.run_return(|event, _, control_flow| {
-                *control_flow = ControlFlow::Poll;
+                    // Render
+                    let (present_index, _) = base
+                        .swapchain_loader
+                        .acquire_next_image(
+                            base.swapchain,
+                            std::u64::MAX,
+                            base.present_complete_semaphore,
+                            vk::Fence::null(),
+                        )
+                        .unwrap();
 
-                match event {
-                    Event::NewEvents(_) => {
-                        // reset input states on new frame
-                        {
-                            is_left_clicked = None;
-                            cursor_position = None;
-                            last_position = app.cursor_position;
-                            wheel_delta = None;
+                    if let Some(delta) = inputs.wheel_delta {
+                        camera.position = camera.position + camera.direction * delta * 5.0;
+                    }
+                    if inputs.is_left_clicked {
+                        if let Some(delta) = inputs.cursor_delta {
+                            let rot = rot_x_axis(delta.1 as f32 * -0.001)
+                                * rot_y_axis(delta.0 as f32 * 0.001);
+                            camera.direction = camera.direction * rot;
+                            camera.direction = camera.direction.normalize();
                         }
                     }
-                    Event::MainEventsCleared => {
-                        // update input state after accumulating event
-                        {
-                            if let Some(is_left_clicked) = is_left_clicked {
-                                app.is_left_clicked = is_left_clicked;
-                            }
-                            if let Some(position) = cursor_position {
-                                app.cursor_position = position;
-                                app.cursor_delta = Some((
-                                    position.0 - last_position.0,
-                                    position.1 - last_position.1,
-                                ));
-                            } else {
-                                app.cursor_delta = None;
-                            }
-                            app.wheel_delta = wheel_delta;
-                        }
 
-                        // render
-                        {
-                            // TODO spawchain resize
-                            /*
-                            if dirty_swapchain {
-                                let size = window.inner_size();
-                                if size.width > 0 && size.height > 0 {
-                                    app.recreate_swapchain();
-                                } else {
-                                    return;
-                                }
-                            }
-                            dirty_swapchain = app.draw_frame();*/
+                    let color = Vec4 {
+                        x: 1.0,
+                        y: 0.1,
+                        z: 0.0,
+                        w: 0.0,
+                    };
 
-                            let (present_index, _) = base
-                                .swapchain_loader
-                                .acquire_next_image(
-                                    base.swapchain,
-                                    std::u64::MAX,
-                                    base.present_complete_semaphore,
-                                    vk::Fence::null(),
-                                )
-                                .unwrap();
+                    let world_to_screen = view(
+                        camera.position,
+                        camera.direction,
+                        Vec3 {
+                            x: 0.0,
+                            y: 1.0,
+                            z: 0.0,
+                        },
+                    ) * projection(
+                        std::f32::consts::PI / 2.0,
+                        window_width as f32 / window_height as f32,
+                        1.0,
+                        10000000.0,
+                    );
 
-                            if let Some(delta) = app.wheel_delta {
-                                camera.position = camera.position + camera.direction * delta * 5.0;
-                            }
-                            if app.is_left_clicked {
-                                if let Some(delta) = app.cursor_delta {
-                                    let rot = rot_x_axis(delta.1 as f32 * -0.001)
-                                        * rot_y_axis(delta.0 as f32 * 0.001);
-                                    camera.direction = camera.direction * rot;
-                                    camera.direction = camera.direction.normalize();
-                                }
-                            }
+                    let uniform_buffer_data = Uniforms {
+                        world_to_screen,
+                        color,
+                        camera_position: camera.position.to_4d(),
+                        volume_scale: volume_scale.to_4d(),
+                        center_to_edge: center_to_edge.to_4d(),
+                        texel_scale: texel_scale.to_4d(),
+                    };
 
-                            let color = Vec4 {
-                                x: 1.0,
-                                y: 0.1,
-                                z: 0.0,
-                                w: 0.0,
+                    uniform_buffer.copy_from_slice(&base.device, &[uniform_buffer_data], 0);
+
+                    let clear_values = [
+                        vk::ClearValue {
+                            color: vk::ClearColorValue {
+                                float32: [0.0, 0.0, 0.0, 0.0],
+                            },
+                        },
+                        vk::ClearValue {
+                            depth_stencil: vk::ClearDepthStencilValue {
+                                depth: 1.0,
+                                stencil: 0,
+                            },
+                        },
+                    ];
+
+                    let render_pass_begin_info = vk::RenderPassBeginInfo::builder()
+                        .render_pass(renderpass)
+                        .framebuffer(framebuffers[present_index as usize])
+                        .render_area(vk::Rect2D {
+                            offset: vk::Offset2D { x: 0, y: 0 },
+                            extent: base.surface_resolution,
+                        })
+                        .clear_values(&clear_values);
+
+                    active_command_buffer = base.record_submit_commandbuffer(
+                        active_command_buffer,
+                        base.present_queue,
+                        &[vk::PipelineStageFlags::BOTTOM_OF_PIPE],
+                        &[base.present_complete_semaphore],
+                        &[base.rendering_complete_semaphore],
+                        |device, draw_command_buffer| {
+                            let buffer_copy_regions = vk::BufferCopy {
+                                src_offset: 0,
+                                dst_offset: 0,
+                                size: std::mem::size_of_val(&uniform_buffer_data) as u64,
                             };
 
-                            let world_to_screen = view(
-                                camera.position,
-                                camera.direction,
-                                Vec3 {
-                                    x: 0.0,
-                                    y: 1.0,
-                                    z: 0.0,
-                                },
-                            ) * projection(
-                                std::f32::consts::PI / 2.0,
-                                window_width as f32 / window_height as f32,
-                                1.0,
-                                10000000.0,
-                            );
-
-                            let uniform_buffer_data = Uniforms {
-                                world_to_screen,
-                                color,
-                                camera_position: camera.position.to_4d(),
-                                volume_scale: volume_scale.to_4d(),
-                                center_to_edge: center_to_edge.to_4d(),
-                                texel_scale: texel_scale.to_4d(),
-                            };
-
-                            uniform_buffer.copy_from_slice(&base.device, &[uniform_buffer_data]);
-
-                            let clear_values = [
-                                vk::ClearValue {
-                                    color: vk::ClearColorValue {
-                                        float32: [0.0, 0.0, 0.0, 0.0],
-                                    },
-                                },
-                                vk::ClearValue {
-                                    depth_stencil: vk::ClearDepthStencilValue {
-                                        depth: 1.0,
-                                        stencil: 0,
-                                    },
-                                },
-                            ];
-
-                            let render_pass_begin_info = vk::RenderPassBeginInfo::builder()
-                                .render_pass(renderpass)
-                                .framebuffer(framebuffers[present_index as usize])
-                                .render_area(vk::Rect2D {
-                                    offset: vk::Offset2D { x: 0, y: 0 },
-                                    extent: base.surface_resolution,
-                                })
-                                .clear_values(&clear_values);
-
-                            active_command_buffer = base.record_submit_commandbuffer(
-                                active_command_buffer,
-                                base.present_queue,
-                                &[vk::PipelineStageFlags::BOTTOM_OF_PIPE],
-                                &[base.present_complete_semaphore],
-                                &[base.rendering_complete_semaphore],
-                                |device, draw_command_buffer| {
-                                    let buffer_copy_regions = vk::BufferCopy {
-                                        src_offset: 0,
-                                        dst_offset: 0,
-                                        size: std::mem::size_of_val(&uniform_buffer_data) as u64,
-                                    };
-
-                                    let buffer_barrier = vk::BufferMemoryBarrier {
-                                        dst_access_mask: vk::AccessFlags::TRANSFER_WRITE,
-                                        buffer: uniform_buffer_gpu.buffer,
-                                        offset: 0,
-                                        size: buffer_copy_regions.size,
-                                        ..Default::default()
-                                    };
-
-                                    device.cmd_pipeline_barrier(
-                                        draw_command_buffer,
-                                        vk::PipelineStageFlags::BOTTOM_OF_PIPE,
-                                        vk::PipelineStageFlags::TRANSFER,
-                                        vk::DependencyFlags::empty(),
-                                        &[],
-                                        &[buffer_barrier],
-                                        &[],
-                                    );
-
-                                    device.cmd_copy_buffer(
-                                        draw_command_buffer,
-                                        uniform_buffer.buffer,
-                                        uniform_buffer_gpu.buffer,
-                                        &[buffer_copy_regions],
-                                    );
-
-                                    let buffer_barrier_end = vk::BufferMemoryBarrier {
-                                        src_access_mask: vk::AccessFlags::TRANSFER_WRITE,
-                                        dst_access_mask: vk::AccessFlags::INDEX_READ,
-                                        buffer: uniform_buffer_gpu.buffer,
-                                        offset: 0,
-                                        size: buffer_copy_regions.size,
-                                        ..Default::default()
-                                    };
-
-                                    device.cmd_pipeline_barrier(
-                                        draw_command_buffer,
-                                        vk::PipelineStageFlags::TRANSFER,
-                                        vk::PipelineStageFlags::VERTEX_INPUT,
-                                        vk::DependencyFlags::empty(),
-                                        &[],
-                                        &[buffer_barrier_end],
-                                        &[],
-                                    );
-
-                                    device.cmd_begin_render_pass(
-                                        draw_command_buffer,
-                                        &render_pass_begin_info,
-                                        vk::SubpassContents::INLINE,
-                                    );
-                                    device.cmd_bind_descriptor_sets(
-                                        draw_command_buffer,
-                                        vk::PipelineBindPoint::GRAPHICS,
-                                        pipeline_layout,
-                                        0,
-                                        &descriptor_sets[..],
-                                        &[],
-                                    );
-                                    device.cmd_bind_pipeline(
-                                        draw_command_buffer,
-                                        vk::PipelineBindPoint::GRAPHICS,
-                                        graphic_pipeline,
-                                    );
-                                    device.cmd_set_viewport(draw_command_buffer, 0, &viewports);
-                                    device.cmd_set_scissor(draw_command_buffer, 0, &scissors);
-                                    device.cmd_bind_index_buffer(
-                                        draw_command_buffer,
-                                        index_buffer_gpu.buffer,
-                                        0,
-                                        vk::IndexType::UINT32,
-                                    );
-                                    device.cmd_draw_indexed(
-                                        draw_command_buffer,
-                                        index_buffer_data.len() as u32,
-                                        1,
-                                        0,
-                                        0,
-                                        1,
-                                    );
-                                    device.cmd_end_render_pass(draw_command_buffer);
-                                },
-                            );
-
-                            let present_info = vk::PresentInfoKHR {
-                                wait_semaphore_count: 1,
-                                p_wait_semaphores: &base.rendering_complete_semaphore,
-                                swapchain_count: 1,
-                                p_swapchains: &base.swapchain,
-                                p_image_indices: &present_index,
+                            let buffer_barrier = vk::BufferMemoryBarrier {
+                                dst_access_mask: vk::AccessFlags::TRANSFER_WRITE,
+                                buffer: uniform_buffer_gpu.buffer,
+                                offset: 0,
+                                size: buffer_copy_regions.size,
                                 ..Default::default()
                             };
 
-                            base.swapchain_loader
-                                .queue_present(base.present_queue, &present_info)
-                                .unwrap();
+                            device.cmd_pipeline_barrier(
+                                draw_command_buffer,
+                                vk::PipelineStageFlags::BOTTOM_OF_PIPE,
+                                vk::PipelineStageFlags::TRANSFER,
+                                vk::DependencyFlags::empty(),
+                                &[],
+                                &[buffer_barrier],
+                                &[],
+                            );
 
-                            frame += 1;
-                            if (frame % 60) == 0 {
-                                let time_now = Instant::now();
-                                let interval = (time_now - time_start).as_millis();
-                                println!("Avg frame time: {}", interval as f32 / 60.0f32);
+                            device.cmd_copy_buffer(
+                                draw_command_buffer,
+                                uniform_buffer.buffer,
+                                uniform_buffer_gpu.buffer,
+                                &[buffer_copy_regions],
+                            );
 
-                                time_start = time_now;
-                            }
+                            let buffer_barrier_end = vk::BufferMemoryBarrier {
+                                src_access_mask: vk::AccessFlags::TRANSFER_WRITE,
+                                dst_access_mask: vk::AccessFlags::INDEX_READ,
+                                buffer: uniform_buffer_gpu.buffer,
+                                offset: 0,
+                                size: buffer_copy_regions.size,
+                                ..Default::default()
+                            };
+
+                            device.cmd_pipeline_barrier(
+                                draw_command_buffer,
+                                vk::PipelineStageFlags::TRANSFER,
+                                vk::PipelineStageFlags::VERTEX_INPUT,
+                                vk::DependencyFlags::empty(),
+                                &[],
+                                &[buffer_barrier_end],
+                                &[],
+                            );
+
+                            device.cmd_begin_render_pass(
+                                draw_command_buffer,
+                                &render_pass_begin_info,
+                                vk::SubpassContents::INLINE,
+                            );
+                            device.cmd_bind_descriptor_sets(
+                                draw_command_buffer,
+                                vk::PipelineBindPoint::GRAPHICS,
+                                pipeline_layout,
+                                0,
+                                &descriptor_sets[..],
+                                &[],
+                            );
+                            device.cmd_bind_pipeline(
+                                draw_command_buffer,
+                                vk::PipelineBindPoint::GRAPHICS,
+                                graphic_pipeline,
+                            );
+                            device.cmd_set_viewport(draw_command_buffer, 0, &viewports);
+                            device.cmd_set_scissor(draw_command_buffer, 0, &scissors);
+                            device.cmd_bind_index_buffer(
+                                draw_command_buffer,
+                                index_buffer_gpu.buffer,
+                                0,
+                                vk::IndexType::UINT32,
+                            );
+                            device.cmd_draw_indexed(
+                                draw_command_buffer,
+                                index_buffer_data.len() as u32,
+                                1,
+                                0,
+                                0,
+                                1,
+                            );
+                            device.cmd_end_render_pass(draw_command_buffer);
+                        },
+                    );
+
+                    let present_info = vk::PresentInfoKHR {
+                        wait_semaphore_count: 1,
+                        p_wait_semaphores: &base.rendering_complete_semaphore,
+                        swapchain_count: 1,
+                        p_swapchains: &base.swapchain,
+                        p_image_indices: &present_index,
+                        ..Default::default()
+                    };
+
+                    base.swapchain_loader
+                        .queue_present(base.present_queue, &present_info)
+                        .unwrap();
+
+                    frame += 1;
+                    if (frame % 60) == 0 {
+                        let time_now = Instant::now();
+                        let interval = (time_now - time_start).as_millis();
+                        println!("Avg frame time: {}", interval as f32 / 60.0f32);
+
+                        time_start = time_now;
+                    }
+                }
+                Event::WindowEvent { event, .. } => match event {
+                    WindowEvent::CloseRequested => *control_flow = ControlFlow::Exit,
+                    WindowEvent::Resized { .. } => dirty_swapchain = true, // TODO: Handle swapchain resize
+
+                    // Accumulate input events
+                    WindowEvent::MouseInput {
+                        button: MouseButton::Left,
+                        state,
+                        ..
+                    } => {
+                        if state == ElementState::Pressed {
+                            is_left_clicked = Some(true);
+                        } else {
+                            is_left_clicked = Some(false);
                         }
                     }
-                    Event::WindowEvent { event, .. } => match event {
-                        WindowEvent::CloseRequested => *control_flow = ControlFlow::Exit,
-                        WindowEvent::Resized { .. } => dirty_swapchain = true,
-                        // Accumulate input events
-                        WindowEvent::MouseInput {
-                            button: MouseButton::Left,
-                            state,
-                            ..
-                        } => {
-                            if state == ElementState::Pressed {
-                                is_left_clicked = Some(true);
-                            } else {
-                                is_left_clicked = Some(false);
-                            }
-                        }
-                        WindowEvent::CursorMoved { position, .. } => {
-                            let position: (i32, i32) = position.into();
-                            cursor_position = Some(position);
-                        }
-                        WindowEvent::MouseWheel {
-                            delta: MouseScrollDelta::LineDelta(_, v_lines),
-                            ..
-                        } => {
-                            wheel_delta = Some(v_lines);
-                        }
-                        _ => (),
-                    },
-                    Event::LoopDestroyed => base.device.device_wait_idle().unwrap(),
+                    WindowEvent::CursorMoved { position, .. } => {
+                        let position: (i32, i32) = position.into();
+                        cursor_position = Some(position);
+                    }
+                    WindowEvent::MouseWheel {
+                        delta: MouseScrollDelta::LineDelta(_, v_lines),
+                        ..
+                    } => {
+                        wheel_delta = Some(v_lines);
+                    }
                     _ => (),
-                }
-            });
-        }
+                },
+                Event::LoopDestroyed => base.device.device_wait_idle().unwrap(),
+                _ => (),
+            }
+        });
 
         println!("End event loop");
 
         base.device.device_wait_idle().unwrap();
 
+        // Cleanup
         for pipeline in graphics_pipelines {
             base.device.destroy_pipeline(pipeline, None);
         }
