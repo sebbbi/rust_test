@@ -14,6 +14,7 @@ use std::default::Default;
 use std::ffi::CString;
 use std::io::Cursor;
 use std::mem;
+use std::slice::from_raw_parts_mut;
 use std::time::Instant;
 
 use ash::util::*;
@@ -214,6 +215,7 @@ fn main() {
 
     let alloc_info_cpu = vk_mem::AllocationCreateInfo {
         usage: vk_mem::MemoryUsage::CpuOnly,
+        flags: vk_mem::AllocationCreateFlags::MAPPED,
         ..Default::default()
     };
 
@@ -224,6 +226,7 @@ fn main() {
 
     let alloc_info_cpu_to_gpu = vk_mem::AllocationCreateInfo {
         usage: vk_mem::MemoryUsage::CpuToGpu,
+        flags: vk_mem::AllocationCreateFlags::MAPPED,
         ..Default::default()
     };
 
@@ -262,7 +265,7 @@ fn main() {
     };
 
     let index_buffer = VkBuffer::new(&base.allocator, &index_buffer_info, &alloc_info_cpu);
-    index_buffer.copy_from_slice(&base.device, &index_buffer_data[..], 0);
+    index_buffer.copy_from_slice(&index_buffer_data[..], 0);
 
     let index_buffer_gpu_info = vk::BufferCreateInfo {
         size: std::mem::size_of_val(&index_buffer_data[..]) as u64,
@@ -297,7 +300,7 @@ fn main() {
         &instances_buffer_info,
         &alloc_info_cpu_to_gpu,
     );
-    instances_buffer.copy_from_slice(&base.device, &index_buffer_data[..], 0);
+    instances_buffer.copy_from_slice(&index_buffer_data[..], 0);
 
     #[derive(Clone, Debug, Copy)]
     struct Uniforms {
@@ -337,33 +340,16 @@ fn main() {
 
     let image_buffer = VkBuffer::new(&base.allocator, &image_buffer_info, &alloc_info_cpu);
 
-    let image_ptr = unsafe {
-        base.device.map_memory(
-            image_buffer.info.get_device_memory(),
-            image_buffer.info.get_offset() as u64,
-            image_buffer.info.get_size() as u64,
-            vk::MemoryMapFlags::empty(),
-        )
-    }
-    .unwrap();
-
     for level in &sdf_levels {
-        let voxels = level.sdf.voxels.len();
-        let size = std::mem::size_of::<u16>() * voxels as usize;
-        let mut image_slice = unsafe {
-            Align::new(
-                image_ptr.add(level.offset as usize * std::mem::size_of::<u16>()),
-                std::mem::align_of::<u8>() as u64,
-                size as u64,
-            )
+        let mem_ptr = unsafe {
+            image_buffer
+                .mapped_ptr
+                .add(level.offset as usize * std::mem::size_of::<u16>())
         };
-        image_slice.copy_from_slice(&level.sdf.voxels[..]);
+        let mapped_slice =
+            unsafe { from_raw_parts_mut(mem_ptr as *mut u16, level.sdf.voxels.len() as usize) };
+        mapped_slice.copy_from_slice(&level.sdf.voxels[..]);
     }
-
-    unsafe {
-        base.device
-            .unmap_memory(image_buffer.info.get_device_memory())
-    };
 
     let image_dimensions = sdf_levels[0].sdf.header.dim;
 
@@ -852,7 +838,7 @@ fn main() {
         })
         .collect();
 
-    instances_buffer.copy_from_slice(&base.device, &instances_buffer_data[..], 0);
+    instances_buffer.copy_from_slice(&instances_buffer_data[..], 0);
 
     // Used to accumutate input events for a frame
     let mut is_left_clicked = None;
@@ -947,7 +933,7 @@ fn main() {
                     texel_scale: texel_scale.to_4d(),
                 };
 
-                uniform_buffer.copy_from_slice(&base.device, &[uniform_buffer_data], 0);
+                uniform_buffer.copy_from_slice(&[uniform_buffer_data], 0);
 
                 let clear_values = [
                     vk::ClearValue {

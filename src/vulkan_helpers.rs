@@ -1,17 +1,17 @@
 extern crate ash;
 extern crate vk_mem;
 
-use ash::util::*;
 pub use ash::version::{DeviceV1_0, EntryV1_0, InstanceV1_0};
-use ash::{vk, Device};
-use std::mem::align_of;
-use std::os::raw::c_void;
-use vk_mem::Allocator;
+use ash::vk;
+use std::ptr;
+use std::slice::from_raw_parts_mut;
+use vk_mem::{Allocator, MemoryUsage};
 
 pub struct VkBuffer {
     pub buffer: vk::Buffer,
     pub allocation: vk_mem::Allocation,
     pub info: vk_mem::AllocationInfo,
+    pub mapped_ptr: *mut u8,
 }
 
 impl VkBuffer {
@@ -24,10 +24,17 @@ impl VkBuffer {
             .create_buffer(buffer_info, allocation_info)
             .expect("Buffer creation failed");
 
+        let mapped_ptr = if allocation_info.usage == MemoryUsage::GpuOnly {
+            ptr::null_mut()
+        } else {
+            info.get_mapped_data()
+        };
+
         VkBuffer {
             buffer,
             allocation,
             info,
+            mapped_ptr,
         }
     }
 
@@ -37,26 +44,16 @@ impl VkBuffer {
             .expect("Buffer destroy failed");
     }
 
-    pub fn copy_from_slice<T>(&self, device: &Device, slice: &[T], offset: u64)
+    pub fn copy_from_slice<T>(&self, slice: &[T], offset: usize)
     where
         T: Copy,
     {
+        assert!(!self.mapped_ptr.is_null());
+
         unsafe {
-            let mem_ptr: *mut c_void = device
-                .map_memory(
-                    self.info.get_device_memory(),
-                    self.info.get_offset() as u64 + offset,
-                    std::mem::size_of_val(slice) as u64,
-                    vk::MemoryMapFlags::empty(),
-                )
-                .unwrap();
-            let mut mem_slice = Align::new(
-                mem_ptr,
-                align_of::<u32>() as u64,
-                std::mem::size_of_val(slice) as u64,
-            );
-            mem_slice.copy_from_slice(slice);
-            device.unmap_memory(self.info.get_device_memory());
+            let mem_ptr = self.mapped_ptr.add(offset);
+            let mapped_slice = from_raw_parts_mut(mem_ptr as *mut T, slice.len());
+            mapped_slice.copy_from_slice(slice);
         }
     }
 }
