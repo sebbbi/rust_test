@@ -14,7 +14,6 @@ use std::default::Default;
 use std::ffi::CString;
 use std::io::Cursor;
 use std::mem;
-use std::slice::from_raw_parts_mut;
 use std::time::Instant;
 
 use ash::util::*;
@@ -341,14 +340,10 @@ fn main() {
     let image_buffer = VkBuffer::new(&base.allocator, &image_buffer_info, &alloc_info_cpu);
 
     for level in &sdf_levels {
-        let mem_ptr = unsafe {
-            image_buffer
-                .mapped_ptr
-                .add(level.offset as usize * std::mem::size_of::<u16>())
-        };
-        let mapped_slice =
-            unsafe { from_raw_parts_mut(mem_ptr as *mut u16, level.sdf.voxels.len() as usize) };
-        mapped_slice.copy_from_slice(&level.sdf.voxels[..]);
+        image_buffer.copy_from_slice(
+            &level.sdf.voxels[..],
+            level.offset as usize * std::mem::size_of::<u16>(),
+        );
     }
 
     let image_dimensions = sdf_levels[0].sdf.header.dim;
