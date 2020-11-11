@@ -38,13 +38,15 @@ bool outside(vec3 uwv) {
 }
 
 vec3 normal(vec3 uvw) {
+
+    float lod = o_local_camera_pos_lod.w;
     vec3 e = ubo.texel_scale.xyz * 0.5;
-    float xm = textureLod(samplerColor, uvw + vec3(-e.x, 0,    0), 0.0).x;
-    float xp = textureLod(samplerColor, uvw + vec3( e.x, 0,    0), 0.0).x;
-    float ym = textureLod(samplerColor, uvw + vec3( 0,   -e.y, 0), 0.0).x;
-    float yp = textureLod(samplerColor, uvw + vec3( 0,   e.y,  0), 0.0).x;
-    float zm = textureLod(samplerColor, uvw + vec3( 0,   0, -e.z), 0.0).x;
-    float zp = textureLod(samplerColor, uvw + vec3( 0,   0,  e.z), 0.0).x;
+    float xm = textureLod(samplerColor, uvw + vec3(-e.x, 0,    0), lod).x;
+    float xp = textureLod(samplerColor, uvw + vec3( e.x, 0,    0), lod).x;
+    float ym = textureLod(samplerColor, uvw + vec3( 0,   -e.y, 0), lod).x;
+    float yp = textureLod(samplerColor, uvw + vec3( 0,   e.y,  0), lod).x;
+    float zm = textureLod(samplerColor, uvw + vec3( 0,   0, -e.z), lod).x;
+    float zp = textureLod(samplerColor, uvw + vec3( 0,   0,  e.z), lod).x;
     return normalize(vec3(xp - xm, yp - ym, zp - zm));
 }
 

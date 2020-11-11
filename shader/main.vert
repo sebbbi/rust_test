@@ -39,7 +39,7 @@ void main() {
     vec3 local_pos = pos.xyz * ubo.center_to_edge.xyz;
     vec3 local_camera_pos = ubo.camera_position.xyz - instance_pos;
 
-    float lod = 0.5 * log2(dot(local_camera_pos, local_camera_pos)) - 5.0;
+    float lod = 0.5 * log2(dot(local_camera_pos, local_camera_pos)) - 6.0;
 
     o_uvw = uvw;
     o_local_pos = local_pos;
