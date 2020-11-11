@@ -1,3 +1,7 @@
+// Modified version of the Ash Vulkan example ExampleBase class
+// Source: https://github.com/MaikKlein/ash/blob/master/examples/src/lib.rs
+// License: https://github.com/MaikKlein/ash
+
 extern crate ash;
 extern crate winit;
 
