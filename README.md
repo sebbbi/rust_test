@@ -12,6 +12,12 @@ https://advances.realtimerendering.com/s2015/aaltonenhaar_siggraph2015_combined_
 
 Various optimization techniques will be tested on top of this prototype.
 
+# Todo
+* main.rs refactoring: Split window code, initialization and rendering cleanly
+* Conservative depth output
+* Command line tool for SDF processing (sdf.rs functionality)
+* Sparse SDF test project
+
 # Install instructions
 * Install rustup: https://www.rust-lang.org/tools/install
 * Install Vulkan SDK: https://vulkan.lunarg.com/sdk/home
