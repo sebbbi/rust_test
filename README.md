@@ -16,3 +16,6 @@ Various optimization techniques will be tested on top of this prototype.
 * Clone repository. Zip download does NOT support git LFS!
 * Install rustup: https://www.rust-lang.org/tools/install
 * Run (cmd): **cargo run --release**
+
+## License
+This repository contents are released under the MIT license. See [LICENSE.md](LICENSE.md) for full text.
