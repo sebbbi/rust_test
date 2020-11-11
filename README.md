@@ -1,6 +1,8 @@
 # Rust & Vulkan test projects
 Contains test projects for Rust & Vulkan
 
+![Screenshot](screenshot.jpg)
+
 The first test project renders 1 million cubes, each containing a 950 MB (uncompressed) distance field volume. It uses an optimized cube renderer rendering only front faces of each cube. 
 
 The second test project is going to be using sparse octree storing a hierarchy of distance field volume bricks, each rasterized as a cube. This will both reduce the SDF volume memory consumption by 98% and make the runtime faster, as most rays missing the object will not be cast at at all, and the remaining rays will start very close to the surface.
