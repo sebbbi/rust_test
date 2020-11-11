@@ -31,7 +31,7 @@ use sdf::*;
 use vulkan_base::*;
 use vulkan_helpers::*;
 
-#[derive(Clone, Debug, Copy)]
+#[derive(Clone, Copy)]
 struct Vertex {
     pos: [f32; 4],
     uv: [f32; 2],
@@ -300,7 +300,7 @@ fn main() {
         &alloc_info_cpu_to_gpu,
     );
 
-    #[derive(Clone, Debug, Copy)]
+    #[derive(Clone, Copy)]
     struct Uniforms {
         world_to_screen: Mat4x4,
         color: Vec4,
@@ -822,7 +822,7 @@ fn main() {
 
     println!("Start window event loop");
 
-    #[derive(Clone, Debug, Copy)]
+    #[derive(Clone, Copy)]
     struct Inputs {
         is_left_clicked: bool,
         cursor_position: (i32, i32),
