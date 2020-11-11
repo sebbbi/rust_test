@@ -1,10 +1,11 @@
-// Modified version of the Ash Vulkan example ExampleBase class
+// Contains a heavily modified version of the Ash Vulkan example ExampleBase class
 // Source: https://github.com/MaikKlein/ash/blob/master/examples/src/lib.rs
 // License: https://github.com/MaikKlein/ash
 
 extern crate ash;
 extern crate winit;
 
+use crate::VkImage;
 use ash::extensions::{
     ext::DebugUtils,
     khr::{Surface, Swapchain},
@@ -20,18 +21,6 @@ use std::ffi::{CStr, CString};
 use std::ops::Drop;
 
 const NUM_COMMAND_BUFFERS: u32 = 3;
-
-// Simple offset_of macro akin to C++ offsetof
-#[macro_export]
-macro_rules! offset_of {
-    ($base:path, $field:ident) => {{
-        #[allow(unused_unsafe)]
-        unsafe {
-            let b: $base = mem::zeroed();
-            (&b.$field as *const _ as isize) - (&b as *const _ as isize)
-        }
-    }};
-}
 
 unsafe extern "system" fn vulkan_debug_callback(
     message_severity: vk::DebugUtilsMessageSeverityFlagsEXT,
@@ -64,41 +53,6 @@ unsafe extern "system" fn vulkan_debug_callback(
     );
 
     vk::FALSE
-}
-
-pub fn find_memorytype_index(
-    memory_req: &vk::MemoryRequirements,
-    memory_prop: &vk::PhysicalDeviceMemoryProperties,
-    flags: vk::MemoryPropertyFlags,
-) -> Option<u32> {
-    // Try to find an exactly matching memory flag
-    let best_suitable_index =
-        find_memorytype_index_f(memory_req, memory_prop, flags, |property_flags, flags| {
-            property_flags == flags
-        });
-    if best_suitable_index.is_some() {
-        return best_suitable_index;
-    }
-    // Otherwise find a memory flag that works
-    find_memorytype_index_f(memory_req, memory_prop, flags, |property_flags, flags| {
-        property_flags & flags == flags
-    })
-}
-
-pub fn find_memorytype_index_f<F: Fn(vk::MemoryPropertyFlags, vk::MemoryPropertyFlags) -> bool>(
-    memory_req: &vk::MemoryRequirements,
-    memory_prop: &vk::PhysicalDeviceMemoryProperties,
-    flags: vk::MemoryPropertyFlags,
-    f: F,
-) -> Option<u32> {
-    let mut memory_type_bits = memory_req.memory_type_bits;
-    for (index, ref memory_type) in memory_prop.memory_types.iter().enumerate() {
-        if memory_type_bits & 1 == 1 && f(memory_type.property_flags, flags) {
-            return Some(index as u32);
-        }
-        memory_type_bits >>= 1;
-    }
-    None
 }
 
 pub struct CommandBuffer {
@@ -174,7 +128,6 @@ pub struct VulkanBase {
     pub debug_call_back: vk::DebugUtilsMessengerEXT,
 
     pub pdevice: vk::PhysicalDevice,
-    pub device_memory_properties: vk::PhysicalDeviceMemoryProperties,
     pub queue_family_index: u32,
     pub present_queue: vk::Queue,
 
@@ -186,9 +139,8 @@ pub struct VulkanBase {
     pub present_images: Vec<vk::Image>,
     pub present_image_views: Vec<vk::ImageView>,
 
-    pub depth_image: vk::Image,
+    pub depth_image: VkImage,
     pub depth_image_view: vk::ImageView,
-    pub depth_image_memory: vk::DeviceMemory,
 
     pub present_complete_semaphore: vk::Semaphore,
     pub rendering_complete_semaphore: vk::Semaphore,
@@ -394,7 +346,17 @@ impl VulkanBase {
                     device.create_image_view(&create_view_info, None).unwrap()
                 })
                 .collect();
-            let device_memory_properties = instance.get_physical_device_memory_properties(pdevice);
+
+            let allocator_create_info = vk_mem::AllocatorCreateInfo {
+                physical_device: pdevice,
+                device: device.clone(),
+                instance: instance.clone(),
+                ..Default::default()
+            };
+
+            let allocator =
+                vk_mem::Allocator::new(&allocator_create_info).expect("Allocator creation failed");
+
             let depth_image_create_info = vk::ImageCreateInfo::builder()
                 .image_type(vk::ImageType::TYPE_2D)
                 .format(vk::Format::D16_UNORM)
@@ -410,26 +372,12 @@ impl VulkanBase {
                 .usage(vk::ImageUsageFlags::DEPTH_STENCIL_ATTACHMENT)
                 .sharing_mode(vk::SharingMode::EXCLUSIVE);
 
-            let depth_image = device.create_image(&depth_image_create_info, None).unwrap();
-            let depth_image_memory_req = device.get_image_memory_requirements(depth_image);
-            let depth_image_memory_index = find_memorytype_index(
-                &depth_image_memory_req,
-                &device_memory_properties,
-                vk::MemoryPropertyFlags::DEVICE_LOCAL,
-            )
-            .expect("Unable to find suitable memory index for depth image.");
+            let alloc_info_gpu = vk_mem::AllocationCreateInfo {
+                usage: vk_mem::MemoryUsage::GpuOnly,
+                ..Default::default()
+            };
 
-            let depth_image_allocate_info = vk::MemoryAllocateInfo::builder()
-                .allocation_size(depth_image_memory_req.size)
-                .memory_type_index(depth_image_memory_index);
-
-            let depth_image_memory = device
-                .allocate_memory(&depth_image_allocate_info, None)
-                .unwrap();
-
-            device
-                .bind_image_memory(depth_image, depth_image_memory, 0)
-                .expect("Unable to bind depth image memory");
+            let depth_image = VkImage::new(&allocator, &depth_image_create_info, &alloc_info_gpu);
 
             let depth_image_view_info = vk::ImageViewCreateInfo::builder()
                 .subresource_range(
@@ -439,7 +387,7 @@ impl VulkanBase {
                         .layer_count(1)
                         .build(),
                 )
-                .image(depth_image)
+                .image(depth_image.image)
                 .format(depth_image_create_info.format)
                 .view_type(vk::ImageViewType::TYPE_2D);
 
@@ -459,23 +407,12 @@ impl VulkanBase {
             let command_buffer_pool =
                 CommandBufferPool::new(&device, queue_family_index, NUM_COMMAND_BUFFERS);
 
-            let allocator_create_info = vk_mem::AllocatorCreateInfo {
-                physical_device: pdevice,
-                device: device.clone(),
-                instance: instance.clone(),
-                ..Default::default()
-            };
-
-            let allocator =
-                vk_mem::Allocator::new(&allocator_create_info).expect("Allocator creation failed");
-
             let vk = VulkanBase {
                 entry,
                 instance,
                 device,
                 queue_family_index,
                 pdevice,
-                device_memory_properties,
                 surface_loader,
                 surface_format,
                 present_queue,
@@ -491,7 +428,6 @@ impl VulkanBase {
                 surface,
                 debug_call_back,
                 debug_utils_loader,
-                depth_image_memory,
                 command_buffer_pool,
                 allocator,
             };
@@ -504,7 +440,7 @@ impl VulkanBase {
                 &[],
                 |device, setup_command_buffer| {
                     let layout_transition_barriers = vk::ImageMemoryBarrier::builder()
-                        .image(depth_image)
+                        .image(vk.depth_image.image)
                         .dst_access_mask(
                             vk::AccessFlags::DEPTH_STENCIL_ATTACHMENT_READ
                                 | vk::AccessFlags::DEPTH_STENCIL_ATTACHMENT_WRITE,
@@ -609,9 +545,9 @@ impl Drop for VulkanBase {
 
             self.command_buffer_pool.destroy(&self.device);
 
-            self.device.free_memory(self.depth_image_memory, None);
             self.device.destroy_image_view(self.depth_image_view, None);
-            self.device.destroy_image(self.depth_image, None);
+            self.depth_image.destroy(&self.allocator);
+
             for &image_view in self.present_image_views.iter() {
                 self.device.destroy_image_view(image_view, None);
             }
