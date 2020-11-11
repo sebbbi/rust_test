@@ -13,12 +13,14 @@ https://advances.realtimerendering.com/s2015/aaltonenhaar_siggraph2015_combined_
 Various optimization techniques will be tested on top of this prototype.
 
 # Instructions
+* Install rustup: https://www.rust-lang.org/tools/install
+* Install Vulkan SDK: https://vulkan.lunarg.com/sdk/home
 * Install git LFS: https://git-lfs.github.com/
 * Run (cmd): **git lfs install**
 * Clone repository (cmd): **git clone https://github.com/sebbbi/rust_test.git**
 * **IMPORTANT:** Zip download does NOT support git LFS!
-* Install rustup: https://www.rust-lang.org/tools/install
 * Run (cmd): **cargo run --release**
+* If you want to recompile shaders, Run (cmd): **compile_shaders.bat**
 
 ## License
 This repository contents are released under the MIT license. See [LICENSE.md](LICENSE.md) for full text.
