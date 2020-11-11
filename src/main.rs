@@ -20,7 +20,7 @@ use ash::util::*;
 use ash::vk;
 
 use winit::{
-    event::{ElementState, Event, MouseButton, MouseScrollDelta, WindowEvent},
+    event::{ElementState, Event, MouseButton, MouseScrollDelta, VirtualKeyCode, WindowEvent},
     event_loop::{ControlFlow, EventLoop},
     platform::desktop::EventLoopExtDesktop,
     window::WindowBuilder,
@@ -787,20 +787,6 @@ fn main() {
 
     let graphic_pipeline = graphics_pipelines[0];
 
-    struct Inputs {
-        is_left_clicked: bool,
-        cursor_position: (i32, i32),
-        cursor_delta: Option<(i32, i32)>,
-        wheel_delta: Option<f32>,
-    };
-
-    let mut inputs = Inputs {
-        is_left_clicked: false,
-        cursor_position: (0, 0),
-        cursor_delta: None,
-        wheel_delta: None,
-    };
-
     struct Camera {
         position: Vec3,
         direction: Vec3,
@@ -834,14 +820,31 @@ fn main() {
 
     instances_buffer.copy_from_slice(&instances_buffer_data[..], 0);
 
-    // Used to accumutate input events for a frame
-    let mut is_left_clicked = None;
-    let mut cursor_position = None;
-    let mut last_position = inputs.cursor_position;
-    let mut wheel_delta = None;
-    let mut dirty_swapchain = false;
+    println!("Start window event loop");
 
-    println!("Start event loop");
+    #[derive(Clone, Debug, Copy)]
+    struct Inputs {
+        is_left_clicked: bool,
+        cursor_position: (i32, i32),
+        wheel_delta: f32,
+        keyboard_forward: i32,
+        keyboard_side: i32,
+    };
+
+    impl Default for Inputs {
+        fn default() -> Inputs {
+            Inputs {
+                is_left_clicked: false,
+                cursor_position: (0, 0),
+                wheel_delta: 0.0,
+                keyboard_forward: 0,
+                keyboard_side: 0,
+            }
+        }
+    };
+
+    let mut inputs_prev: Inputs = Default::default();
+    let mut inputs: Inputs = Default::default();
 
     let mut time_start = Instant::now();
     let mut frame = 0u32;
@@ -852,37 +855,56 @@ fn main() {
 
         match event {
             Event::NewEvents(_) => {
-                // Reset input states on new frame
-                is_left_clicked = None;
-                cursor_position = None;
-                last_position = inputs.cursor_position;
-                wheel_delta = None;
+                inputs.wheel_delta = 0.0;
             }
+
             Event::MainEventsCleared => {
-                // Update input state after accumulating event
-                if let Some(is_left_clicked) = is_left_clicked {
-                    inputs.is_left_clicked = is_left_clicked;
-                }
-                if let Some(position) = cursor_position {
-                    inputs.cursor_position = position;
-                    inputs.cursor_delta =
-                        Some((position.0 - last_position.0, position.1 - last_position.1));
-                } else {
-                    inputs.cursor_delta = None;
-                }
-                inputs.wheel_delta = wheel_delta;
+                let cursor_delta = (
+                    inputs.cursor_position.0 - inputs_prev.cursor_position.0,
+                    inputs.cursor_position.1 - inputs_prev.cursor_position.1,
+                );
+
+                inputs_prev = inputs;
 
                 // Update camera based in inputs
-                if let Some(delta) = inputs.wheel_delta {
-                    camera.position = camera.position + camera.direction * delta * 5.0;
-                }
+                let view_rot = view(
+                    Vec3 {
+                        x: 0.0,
+                        y: 0.0,
+                        z: 0.0,
+                    },
+                    camera.direction,
+                    Vec3 {
+                        x: 0.0,
+                        y: 1.0,
+                        z: 0.0,
+                    },
+                );
+
+                let forward_speed = inputs.wheel_delta * 5.0 + inputs.keyboard_forward as f32 * 1.0;
+                camera.position = camera.position + camera.direction * forward_speed;
+
+                let side_speed = inputs.keyboard_side as f32 * 1.0;
+                let side_vec = Vec3 {
+                    x: view_rot.r0.x,
+                    y: view_rot.r1.x,
+                    z: view_rot.r2.x,
+                };
+                camera.position = camera.position + side_vec * side_speed;
+
                 if inputs.is_left_clicked {
-                    if let Some(delta) = inputs.cursor_delta {
-                        let rot = rot_x_axis(delta.1 as f32 * -0.001)
-                            * rot_y_axis(delta.0 as f32 * 0.001);
-                        camera.direction = camera.direction * rot;
-                        camera.direction = camera.direction.normalize();
-                    }
+                    let rot = rot_y_axis(cursor_delta.0 as f32 * 0.0015)
+                        * rot_x_axis(cursor_delta.1 as f32 * 0.0015);
+
+                    let rot = rot * inverse(view_rot);
+
+                    camera.direction = Vec3 {
+                        x: 0.0,
+                        y: 0.0,
+                        z: 1.0,
+                    } * rot;
+
+                    camera.direction = camera.direction.normalize();
                 }
 
                 // Render
@@ -1076,40 +1098,61 @@ fn main() {
                     time_start = time_now;
                 }
             }
+
             Event::WindowEvent { event, .. } => match event {
                 WindowEvent::CloseRequested => *control_flow = ControlFlow::Exit,
-                WindowEvent::Resized { .. } => dirty_swapchain = true, // TODO: Handle swapchain resize
 
-                // Accumulate input events
+                // TODO: Handle swapchain resize
+                WindowEvent::Resized { .. } => {}
+
+                // Keyboard
+                WindowEvent::KeyboardInput { input, .. } => {
+                    let pressed = input.state == ElementState::Pressed;
+
+                    if input.virtual_keycode == Some(VirtualKeyCode::W) {
+                        inputs.keyboard_forward = if pressed { 1 } else { 0 };
+                    }
+
+                    if input.virtual_keycode == Some(VirtualKeyCode::S) {
+                        inputs.keyboard_forward = if pressed { -1 } else { 0 };
+                    }
+
+                    if input.virtual_keycode == Some(VirtualKeyCode::D) {
+                        inputs.keyboard_side = if pressed { 1 } else { 0 };
+                    }
+
+                    if input.virtual_keycode == Some(VirtualKeyCode::A) {
+                        inputs.keyboard_side = if pressed { -1 } else { 0 };
+                    }
+                }
+
+                // Mouse
                 WindowEvent::MouseInput {
                     button: MouseButton::Left,
                     state,
                     ..
                 } => {
-                    if state == ElementState::Pressed {
-                        is_left_clicked = Some(true);
-                    } else {
-                        is_left_clicked = Some(false);
-                    }
+                    inputs.is_left_clicked = state == ElementState::Pressed;
                 }
                 WindowEvent::CursorMoved { position, .. } => {
                     let position: (i32, i32) = position.into();
-                    cursor_position = Some(position);
+                    inputs.cursor_position = position;
                 }
                 WindowEvent::MouseWheel {
                     delta: MouseScrollDelta::LineDelta(_, v_lines),
                     ..
                 } => {
-                    wheel_delta = Some(v_lines);
+                    inputs.wheel_delta += v_lines;
                 }
                 _ => (),
             },
+
             Event::LoopDestroyed => unsafe { base.device.device_wait_idle() }.unwrap(),
             _ => (),
         }
     });
 
-    println!("End event loop");
+    println!("End window event loop");
 
     unsafe { base.device.device_wait_idle() }.unwrap();
 
