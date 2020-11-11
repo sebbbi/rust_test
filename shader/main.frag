@@ -55,17 +55,26 @@ void main() {
     vec3 ray_dir = normalize(o_local_pos - o_local_camera_pos_lod.xyz);
 
     ray_dir *= ubo.volume_scale.xyz;
-    float d = 0;
-    for (uint i=0; i<1024; ++i) {
-        vec3 uvw = ray_pos + ray_dir * d;
-        if (outside(uvw)) {
-            discard;
-            break;
+
+    // Do the first step without the outside check
+    // Rasterization does not guarantee perfect interpolation
+    float s = textureLod(samplerColor, ray_pos, o_local_camera_pos_lod.w).x;
+    s = s * 2.0 - 1.0;
+
+    float d = s;
+    if (s > 0.00025) 
+    {
+        for (uint i=0; i<1024; ++i) {
+            vec3 uvw = ray_pos + ray_dir * d;
+            if (outside(uvw)) {
+                discard;
+                break;
+            }
+            float s = textureLod(samplerColor, uvw, o_local_camera_pos_lod.w).x;
+            s = s * 2.0 - 1.0;
+            d += s;
+            if (s < 0.00025) break;
         }
-        float s = textureLod(samplerColor, uvw, o_local_camera_pos_lod.w).x;
-        s = s * 2.0 - 1.0;
-        d += s;
-        if (s < 0.00025) break;
     }
     uFragColor = vec4(normal(ray_pos + ray_dir * d), 1.0);
 }
