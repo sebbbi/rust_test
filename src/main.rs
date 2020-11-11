@@ -881,10 +881,10 @@ fn main() {
                     },
                 );
 
-                let forward_speed = inputs.wheel_delta * 5.0 + inputs.keyboard_forward as f32 * 1.0;
+                let forward_speed = inputs.wheel_delta * 5.0 + inputs.keyboard_forward as f32 * 1.5;
                 camera.position = camera.position + camera.direction * forward_speed;
 
-                let side_speed = inputs.keyboard_side as f32 * 1.0;
+                let side_speed = inputs.keyboard_side as f32 * 1.5;
                 let side_vec = Vec3 {
                     x: view_rot.r0.x,
                     y: view_rot.r1.x,
