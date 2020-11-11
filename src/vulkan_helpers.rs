@@ -48,6 +48,7 @@ impl VkBuffer {
     where
         T: Copy,
     {
+        assert!(std::mem::size_of_val(slice) + offset <= self.info.get_size());
         assert!(!self.mapped_ptr.is_null());
 
         unsafe {

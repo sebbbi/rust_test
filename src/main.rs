@@ -299,7 +299,6 @@ fn main() {
         &instances_buffer_info,
         &alloc_info_cpu_to_gpu,
     );
-    instances_buffer.copy_from_slice(&index_buffer_data[..], 0);
 
     #[derive(Clone, Debug, Copy)]
     struct Uniforms {
