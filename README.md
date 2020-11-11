@@ -13,7 +13,8 @@ Various optimization techniques will be tested on top of this prototype.
 # Instructions
 * Install git LFS: https://git-lfs.github.com/
 * Run (cmd): **git lfs install**
-* Clone repository. Zip download does NOT support git LFS!
+* Clone repository (cmd): **git clone https://github.com/sebbbi/rust_test.git**
+* **IMPORTANT:** Zip download does NOT support git LFS!
 * Install rustup: https://www.rust-lang.org/tools/install
 * Run (cmd): **cargo run --release**
 
