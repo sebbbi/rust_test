@@ -12,7 +12,13 @@ https://advances.realtimerendering.com/s2015/aaltonenhaar_siggraph2015_combined_
 
 Various optimization techniques will be tested on top of this prototype.
 
-# Instructions
+# Todo
+* main.rs refactoring: Split window code, initialization and rendering cleanly
+* Conservative depth output
+* Command line tool for SDF processing (sdf.rs functionality)
+* Sparse SDF test project
+
+# Install instructions
 * Install rustup: https://www.rust-lang.org/tools/install
 * Install Vulkan SDK: https://vulkan.lunarg.com/sdk/home
 * Install git LFS: https://git-lfs.github.com/
@@ -21,6 +27,12 @@ Various optimization techniques will be tested on top of this prototype.
 * **IMPORTANT:** Zip download does NOT support git LFS!
 * Run (cmd): **cargo run --release**
 * If you want to recompile shaders, Run (cmd): **compile_shaders.bat**
+
+# How to use
+* Start (cmd): **cargo run --release**
+* WASD = fly around
+* Drag mouse left button = rotate camera
+* Mouse wheel = jump backward / forward
 
 ## License
 This repository contents are released under the MIT license. See [LICENSE.md](LICENSE.md) for full text.
