@@ -30,11 +30,18 @@ Various optimization techniques will be tested on top of this prototype.
 * Run (cmd): **cargo run --release**
 * If you want to recompile shaders, Run (cmd): **compile_shaders.bat**
 
-# How to use
+# How to use the prototype
 * Start (cmd): **cargo run --release**
 * WASD = fly around
 * Drag mouse left button = rotate camera
 * Mouse wheel = jump backward / forward
+
+# How to import a new SDF (from .obj file)
+* Clone my SDFGen fork: https://github.com/sebbbi/SDFGen
+* This version of SDFGen has 16 bit binary output. Which is compatible with rust_test
+* Compile the project with a C++ compiler of your choice (use x64 target)
+* Run (cmd): **SDFGen.exe your_file.obj 0.125 32**
+* Replace this line with load_sdf("your_file.sdf"): https://github.com/sebbbi/rust_test/blob/main/src/main.rs#L45
 
 ## License
 This repository contents are released under the MIT license. See [LICENSE.md](LICENSE.md) for full text.
