@@ -40,7 +40,7 @@ Various optimization techniques will be tested on top of this prototype.
 * Clone my SDFGen fork: https://github.com/sebbbi/SDFGen
 * This version of SDFGen has 16 bit binary output. Which is compatible with rust_test
 * Compile the project with a C++ compiler of your choice (use x64 target)
-* Run (cmd): **SDFGen.exe your_file.obj 0.125 32**
+* Run (cmd): **SDFGen.exe your_file.obj 0.125 32** (the 0.125 is the voxel size, use larger value if the SDF resolution is too large)
 * Replace this line with load_sdf("your_file.sdf"): https://github.com/sebbbi/rust_test/blob/main/src/main.rs#L45
 
 ## License
