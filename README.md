@@ -15,8 +15,10 @@ Various optimization techniques will be tested on top of this prototype.
 # Todo
 * main.rs refactoring: Split window code, initialization and rendering cleanly
 * Conservative depth output
+* GPU-driven occlusion culling
 * Command line tool for SDF processing (sdf.rs functionality)
 * Sparse SDF test project
+* More than one SDF volume (easy to implement for sparse SDF)
 
 # Install instructions
 * Install rustup: https://www.rust-lang.org/tools/install
