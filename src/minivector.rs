@@ -251,32 +251,13 @@ impl ops::Mul<Mat4x4> for Vec3 {
     }
 }
 
+#[rustfmt::skip]
 pub fn identity() -> Mat4x4 {
     Mat4x4 {
-        r0: Vec4 {
-            x: 1.0,
-            y: 0.0,
-            z: 0.0,
-            w: 0.0,
-        },
-        r1: Vec4 {
-            x: 0.0,
-            y: 1.0,
-            z: 0.0,
-            w: 0.0,
-        },
-        r2: Vec4 {
-            x: 0.0,
-            y: 0.0,
-            z: 1.0,
-            w: 0.0,
-        },
-        r3: Vec4 {
-            x: 0.0,
-            y: 0.0,
-            z: 0.0,
-            w: 1.0,
-        },
+        r0: Vec4 { x: 1.0, y: 0.0, z: 0.0, w: 0.0, },
+        r1: Vec4 { x: 0.0, y: 1.0, z: 0.0, w: 0.0, },
+        r2: Vec4 { x: 0.0, y: 0.0, z: 1.0, w: 0.0, },
+        r3: Vec4 { x: 0.0, y: 0.0, z: 0.0, w: 1.0, },
     }
 }
 
@@ -334,30 +315,16 @@ pub fn inverse(m: Mat4x4) -> Mat4x4 {
     }
 }
 
+#[rustfmt::skip]
 pub fn view(position: Vec3, forward: Vec3, up: Vec3) -> Mat4x4 {
     let forward = forward.normalize();
     let right = up.cross(forward).normalize();
     let up = forward.cross(right).normalize();
 
     Mat4x4 {
-        r0: Vec4 {
-            x: right.x,
-            y: up.x,
-            z: forward.x,
-            w: 0.0,
-        },
-        r1: Vec4 {
-            x: right.y,
-            y: up.y,
-            z: forward.y,
-            w: 0.0,
-        },
-        r2: Vec4 {
-            x: right.z,
-            y: up.z,
-            z: forward.z,
-            w: 0.0,
-        },
+        r0: Vec4 { x: right.x, y: up.x, z: forward.x, w: 0.0, },
+        r1: Vec4 { x: right.y, y: up.y, z: forward.y, w: 0.0, },
+        r2: Vec4 { x: right.z, y: up.z, z: forward.z, w: 0.0, },
         r3: Vec4 {
             x: -position.dot(right),
             y: -position.dot(up),
@@ -367,6 +334,7 @@ pub fn view(position: Vec3, forward: Vec3, up: Vec3) -> Mat4x4 {
     }
 }
 
+#[rustfmt::skip]
 pub fn projection(fovy: f32, aspect: f32, znear: f32, zfar: f32) -> Mat4x4 {
     let h = 1.0 / (fovy * 0.5).tan();
     let w = h / aspect;
@@ -374,169 +342,59 @@ pub fn projection(fovy: f32, aspect: f32, znear: f32, zfar: f32) -> Mat4x4 {
     let b = (znear * zfar) / (zfar - znear);
 
     Mat4x4 {
-        r0: Vec4 {
-            x: w,
-            y: 0.0,
-            z: 0.0,
-            w: 0.0,
-        },
-        r1: Vec4 {
-            x: 0.0,
-            y: -h,
-            z: 0.0,
-            w: 0.0,
-        },
-        r2: Vec4 {
-            x: 0.0,
-            y: 0.0,
-            z: a,
-            w: 1.0,
-        },
-        r3: Vec4 {
-            x: 0.0,
-            y: 0.0,
-            z: b,
-            w: 0.0,
-        },
+        r0: Vec4 { x: w,   y: 0.0, z: 0.0, w: 0.0, },
+        r1: Vec4 { x: 0.0, y: -h,  z: 0.0, w: 0.0, },
+        r2: Vec4 { x: 0.0, y: 0.0, z: a,   w: 1.0, },
+        r3: Vec4 { x: 0.0, y: 0.0, z: b,   w: 0.0, },
     }
 }
 
+#[rustfmt::skip]
 pub fn translate(position: Vec3) -> Mat4x4 {
     Mat4x4 {
-        r0: Vec4 {
-            x: 1.0,
-            y: 0.0,
-            z: 0.0,
-            w: 0.0,
-        },
-        r1: Vec4 {
-            x: 0.0,
-            y: 1.0,
-            z: 0.0,
-            w: 0.0,
-        },
-        r2: Vec4 {
-            x: 0.0,
-            y: 0.0,
-            z: 1.0,
-            w: 0.0,
-        },
+        r0: Vec4 { x: 1.0, y: 0.0, z: 0.0, w: 0.0, },
+        r1: Vec4 { x: 0.0, y: 1.0, z: 0.0, w: 0.0, },
+        r2: Vec4 { x: 0.0, y: 0.0, z: 1.0, w: 0.0, },
         r3: position.to_4d(),
     }
 }
 
+#[rustfmt::skip]
 pub fn scale(v: Vec3) -> Mat4x4 {
     Mat4x4 {
-        r0: Vec4 {
-            x: v.x,
-            y: 0.0,
-            z: 0.0,
-            w: 0.0,
-        },
-        r1: Vec4 {
-            x: 0.0,
-            y: v.y,
-            z: 0.0,
-            w: 0.0,
-        },
-        r2: Vec4 {
-            x: 0.0,
-            y: 0.0,
-            z: v.z,
-            w: 0.0,
-        },
-        r3: Vec4 {
-            x: 0.0,
-            y: 0.0,
-            z: 0.0,
-            w: 1.0,
-        },
+        r0: Vec4 { x: v.x, y: 0.0, z: 0.0, w: 0.0, },
+        r1: Vec4 { x: 0.0, y: v.y, z: 0.0, w: 0.0, },
+        r2: Vec4 { x: 0.0, y: 0.0, z: v.z, w: 0.0, },
+        r3: Vec4 { x: 0.0, y: 0.0, z: 0.0, w: 1.0, },
     }
 }
 
+#[rustfmt::skip]
 pub fn rot_x_axis(r: f32) -> Mat4x4 {
     Mat4x4 {
-        r0: Vec4 {
-            x: 1.0,
-            y: 0.0,
-            z: 0.0,
-            w: 0.0,
-        },
-        r1: Vec4 {
-            x: 0.0,
-            y: r.cos(),
-            z: r.sin(),
-            w: 0.0,
-        },
-        r2: Vec4 {
-            x: 0.0,
-            y: -r.sin(),
-            z: r.cos(),
-            w: 0.0,
-        },
-        r3: Vec4 {
-            x: 0.0,
-            y: 0.0,
-            z: 0.0,
-            w: 1.0,
-        },
+        r0: Vec4 { x: 1.0, y: 0.0,      z: 0.0,     w: 0.0, },
+        r1: Vec4 { x: 0.0, y: r.cos(),  z: r.sin(), w: 0.0, },
+        r2: Vec4 { x: 0.0, y: -r.sin(), z: r.cos(), w: 0.0, },
+        r3: Vec4 { x: 0.0, y: 0.0,      z: 0.0,     w: 1.0,},
     }
 }
 
+#[rustfmt::skip]
 pub fn rot_y_axis(r: f32) -> Mat4x4 {
     Mat4x4 {
-        r0: Vec4 {
-            x: r.cos(),
-            y: 0.0,
-            z: -r.sin(),
-            w: 0.0,
-        },
-        r1: Vec4 {
-            x: 0.0,
-            y: 1.0,
-            z: 0.0,
-            w: 0.0,
-        },
-        r2: Vec4 {
-            x: r.sin(),
-            y: 0.0,
-            z: r.cos(),
-            w: 0.0,
-        },
-        r3: Vec4 {
-            x: 0.0,
-            y: 0.0,
-            z: 0.0,
-            w: 1.0,
-        },
+        r0: Vec4 { x: r.cos(), y: 0.0, z: -r.sin(), w: 0.0, },
+        r1: Vec4 { x: 0.0,     y: 1.0, z: 0.0,      w: 0.0, },
+        r2: Vec4 { x: r.sin(), y: 0.0, z: r.cos(),  w: 0.0, },
+        r3: Vec4 { x: 0.0,     y: 0.0, z: 0.0,      w: 1.0, },
     }
 }
 
+#[rustfmt::skip]
 pub fn rot_z_axis(r: f32) -> Mat4x4 {
     Mat4x4 {
-        r0: Vec4 {
-            x: r.cos(),
-            y: r.sin(),
-            z: 0.0,
-            w: 0.0,
-        },
-        r1: Vec4 {
-            x: -r.sin(),
-            y: r.cos(),
-            z: 0.0,
-            w: 0.0,
-        },
-        r2: Vec4 {
-            x: 0.0,
-            y: 0.0,
-            z: 1.0,
-            w: 0.0,
-        },
-        r3: Vec4 {
-            x: 0.0,
-            y: 0.0,
-            z: 0.0,
-            w: 1.0,
-        },
+        r0: Vec4 { x: r.cos(),  y: r.sin(), z: 0.0, w: 0.0, },
+        r1: Vec4 { x: -r.sin(), y: r.cos(), z: 0.0, w: 0.0, },
+        r2: Vec4 { x: 0.0,      y: 0.0,     z: 1.0, w: 0.0, },
+        r3: Vec4 { x: 0.0,      y: 0.0,     z: 0.0, w: 1.0, },
     }
 }
