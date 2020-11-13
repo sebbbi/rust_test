@@ -49,7 +49,7 @@ void main() {
 
     float lod = 0.5 * log2(dot(local_camera_pos, local_camera_pos)) - 6.0;
 
-    vec3 texel_scale_lod = ubo.texel_scale.xyz * exp2(max(lod, 0.0));
+    vec3 texel_scale_lod = ubo.texel_scale.xyz * exp2(clamp(lod, 0.0, 5.0));
 
     o_uvw = uvw * (vec3(1.0) - texel_scale_lod) + texel_scale_lod * 0.5;
     o_local_pos = local_pos;
