@@ -150,7 +150,7 @@ fn main() {
             ..Default::default()
         },
         vk::AttachmentDescription {
-            format: vk::Format::D16_UNORM,
+            format: vk::Format::D32_SFLOAT,
             samples: vk::SampleCountFlags::TYPE_1,
             load_op: vk::AttachmentLoadOp::CLEAR,
             initial_layout: vk::ImageLayout::DEPTH_STENCIL_ATTACHMENT_OPTIMAL,
@@ -738,7 +738,7 @@ fn main() {
     let depth_state_info = vk::PipelineDepthStencilStateCreateInfo {
         depth_test_enable: 1,
         depth_write_enable: 1,
-        depth_compare_op: vk::CompareOp::LESS_OR_EQUAL,
+        depth_compare_op: vk::CompareOp::GREATER_OR_EQUAL,
         front: noop_stencil_state,
         back: noop_stencil_state,
         max_depth_bounds: 1.0,
@@ -959,7 +959,7 @@ fn main() {
                     },
                     vk::ClearValue {
                         depth_stencil: vk::ClearDepthStencilValue {
-                            depth: 1.0,
+                            depth: 0.0,
                             stencil: 0,
                         },
                     },

@@ -362,7 +362,7 @@ impl VulkanBase {
 
             let depth_image_create_info = vk::ImageCreateInfo::builder()
                 .image_type(vk::ImageType::TYPE_2D)
-                .format(vk::Format::D16_UNORM)
+                .format(vk::Format::D32_SFLOAT)
                 .extent(vk::Extent3D {
                     width: surface_resolution.width,
                     height: surface_resolution.height,

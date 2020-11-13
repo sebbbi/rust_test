@@ -370,8 +370,8 @@ pub fn view(position: Vec3, forward: Vec3, up: Vec3) -> Mat4x4 {
 pub fn projection(fovy: f32, aspect: f32, znear: f32, zfar: f32) -> Mat4x4 {
     let h = 1.0 / (fovy * 0.5).tan();
     let w = h / aspect;
-    let a = zfar / (zfar - znear);
-    let b = (-znear * zfar) / (zfar - znear);
+    let a = -znear / (zfar - znear);
+    let b = (znear * zfar) / (zfar - znear);
 
     Mat4x4 {
         r0: Vec4 {
