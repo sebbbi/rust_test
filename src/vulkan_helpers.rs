@@ -2,7 +2,7 @@ extern crate ash;
 extern crate vk_mem;
 
 pub use ash::version::{DeviceV1_0, EntryV1_0, InstanceV1_0};
-use ash::vk;
+use ash::{vk, Device};
 use std::ptr;
 use std::slice::from_raw_parts_mut;
 use vk_mem::{Allocator, MemoryUsage};
@@ -11,6 +11,7 @@ pub struct VkBuffer {
     pub buffer: vk::Buffer,
     pub allocation: vk_mem::Allocation,
     pub info: vk_mem::AllocationInfo,
+    pub size: u64,
     pub mapped_ptr: *mut u8,
 }
 
@@ -20,6 +21,8 @@ impl VkBuffer {
         buffer_info: &vk::BufferCreateInfo,
         allocation_info: &vk_mem::AllocationCreateInfo,
     ) -> VkBuffer {
+        let size = buffer_info.size;
+
         let (buffer, allocation, info) = allocator
             .create_buffer(buffer_info, allocation_info)
             .expect("Buffer creation failed");
@@ -34,6 +37,7 @@ impl VkBuffer {
             buffer,
             allocation,
             info,
+            size,
             mapped_ptr,
         }
     }
@@ -85,5 +89,29 @@ impl VkImage {
         allocator
             .destroy_image(self.image, &self.allocation)
             .expect("Image destroy failed");
+    }
+}
+
+pub struct VkViewScissor {
+    pub viewport: vk::Viewport,
+    pub scissor: vk::Rect2D,
+}
+
+pub struct VkUploadImageWithViewSampler {
+    pub image: VkImage,
+    pub upload_buffer: VkBuffer,
+    pub sampler: vk::Sampler,
+    pub view: vk::ImageView,
+    pub descriptor: vk::DescriptorImageInfo,
+}
+
+impl VkUploadImageWithViewSampler {
+    pub fn destroy(&self, device: &Device, allocator: &vk_mem::Allocator) {
+        unsafe {
+            device.destroy_image_view(self.view, None);
+            self.image.destroy(allocator);
+            self.upload_buffer.destroy(allocator);
+            device.destroy_sampler(self.sampler, None);
+        }
     }
 }
