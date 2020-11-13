@@ -1,0 +1,40 @@
+#version 450
+#extension GL_ARB_separate_shader_objects : enable
+#extension GL_ARB_shading_language_420pack : enable
+
+layout(local_size_x_id = 8, local_size_y_id = 8) in;
+
+layout (binding = 0) uniform UBO {
+	uint dimensions;	// pow2 y dimension of mip 0 (texture x is 1.5x wider)
+    uint mip;
+} ubo;
+
+layout (binding = 1, r32f) uniform image2D tex;
+
+uvec4 calculate_mip_rect(uint dimensions, uint mip)
+{
+    uint pixels_mip = dimensions >> mip;
+    uvec4 uv_rect = uvec4(0, 0, pixels_mip, pixels_mip);
+    if (mip > 0)
+    {
+        uv_rect.x = dimensions;
+        uv_rect.y = dimensions - pixels_mip * 2;
+    }
+    return uv_rect;
+}
+
+void main() {
+    uvec2 xy = uvec2(gl_GlobalInvocationID.xy);
+    uvec4 src_rect = calculate_mip_rect(ubo.dimensions, ubo.mip);
+    uvec4 dst_rect = calculate_mip_rect(ubo.dimensions, ubo.mip + 1);
+        
+    // Could use image gather instead of 4 loads...
+    uvec2 xy2 = 2 * xy;
+    float z00 = imageLoad(tex, ivec2(src_rect.xy + xy2 + uvec2(0, 0))).x;
+    float z01 = imageLoad(tex, ivec2(src_rect.xy + xy2 + uvec2(0, 1))).x;
+    float z10 = imageLoad(tex, ivec2(src_rect.xy + xy2 + uvec2(1, 0))).x;
+    float z11 = imageLoad(tex, ivec2(src_rect.xy + xy2 + uvec2(1, 1))).x;
+    
+    float z_min = min(min(z00, z01), min(z10, z11));
+    imageStore(tex, ivec2(dst_rect.xy + xy), vec4(z_min,0.0,0.0,0.0));
+}
