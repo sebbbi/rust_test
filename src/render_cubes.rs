@@ -46,7 +46,7 @@ impl RenderCubes {
         descriptor_pool: &vk::DescriptorPool,
         render_pass: &vk::RenderPass,
         view_scissor: &VkViewScissor,
-        sdf_texture: &VkUploadImageWithViewSampler,
+        sdf_texture_descriptor: &vk::DescriptorImageInfo,
     ) -> RenderCubes {
         let alloc_info_cpu = vk_mem::AllocationCreateInfo {
             usage: vk_mem::MemoryUsage::CpuOnly,
@@ -223,7 +223,7 @@ impl RenderCubes {
                 dst_binding: 2,
                 descriptor_count: 1,
                 descriptor_type: vk::DescriptorType::COMBINED_IMAGE_SAMPLER,
-                p_image_info: &sdf_texture.descriptor,
+                p_image_info: sdf_texture_descriptor,
                 ..Default::default()
             },
         ];

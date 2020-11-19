@@ -2,7 +2,7 @@ extern crate ash;
 extern crate vk_mem;
 
 pub use ash::version::{DeviceV1_0, EntryV1_0, InstanceV1_0};
-use ash::{vk, Device};
+use ash::vk;
 use std::ptr;
 use std::slice::from_raw_parts_mut;
 use vk_mem::{Allocator, MemoryUsage};
@@ -95,23 +95,4 @@ impl VkImage {
 pub struct VkViewScissor {
     pub viewport: vk::Viewport,
     pub scissor: vk::Rect2D,
-}
-
-pub struct VkUploadImageWithViewSampler {
-    pub image: VkImage,
-    pub upload_buffer: VkBuffer,
-    pub sampler: vk::Sampler,
-    pub view: vk::ImageView,
-    pub descriptor: vk::DescriptorImageInfo,
-}
-
-impl VkUploadImageWithViewSampler {
-    pub fn destroy(&self, device: &Device, allocator: &vk_mem::Allocator) {
-        unsafe {
-            device.destroy_image_view(self.view, None);
-            self.image.destroy(allocator);
-            self.upload_buffer.destroy(allocator);
-            device.destroy_sampler(self.sampler, None);
-        }
-    }
 }

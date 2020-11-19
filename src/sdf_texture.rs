@@ -11,7 +11,11 @@ use crate::vulkan_helpers::*;
 use crate::SdfLevel;
 
 pub struct SdfTexture {
-    pub image: VkUploadImageWithViewSampler,
+    pub image: VkImage,
+    pub upload_buffer: VkBuffer,
+    pub sampler: vk::Sampler,
+    pub view: vk::ImageView,
+    pub descriptor: vk::DescriptorImageInfo,
 }
 
 impl SdfTexture {
@@ -114,15 +118,13 @@ impl SdfTexture {
             sampler,
         };
 
-        let image = VkUploadImageWithViewSampler {
+        SdfTexture {
             image,
             upload_buffer,
             sampler,
             view: tex_image_view,
             descriptor: tex_descriptor,
-        };
-
-        SdfTexture { image }
+        }
     }
 
     pub fn setup(
@@ -135,7 +137,7 @@ impl SdfTexture {
         let texture_barrier = vk::ImageMemoryBarrier {
             dst_access_mask: vk::AccessFlags::TRANSFER_WRITE,
             new_layout: vk::ImageLayout::TRANSFER_DST_OPTIMAL,
-            image: self.image.image.image,
+            image: self.image.image,
             subresource_range: vk::ImageSubresourceRange {
                 aspect_mask: vk::ImageAspectFlags::COLOR,
                 level_count: sdf_levels.len() as u32,
@@ -170,7 +172,7 @@ impl SdfTexture {
             dst_access_mask: vk::AccessFlags::SHADER_READ,
             old_layout: vk::ImageLayout::TRANSFER_DST_OPTIMAL,
             new_layout: vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL,
-            image: self.image.image.image,
+            image: self.image.image,
             subresource_range: vk::ImageSubresourceRange {
                 aspect_mask: vk::ImageAspectFlags::COLOR,
                 level_count: sdf_levels.len() as u32,
@@ -193,8 +195,8 @@ impl SdfTexture {
 
             device.cmd_copy_buffer_to_image(
                 *command_buffer,
-                self.image.upload_buffer.buffer,
-                self.image.image.image,
+                self.upload_buffer.buffer,
+                self.image.image,
                 vk::ImageLayout::TRANSFER_DST_OPTIMAL,
                 &image_copys[..],
             );
@@ -212,6 +214,11 @@ impl SdfTexture {
     }
 
     pub fn destroy(&self, device: &Device, allocator: &vk_mem::Allocator) {
-        self.image.destroy(&device, &allocator);
+        unsafe {
+            device.destroy_image_view(self.view, None);
+            self.image.destroy(allocator);
+            self.upload_buffer.destroy(allocator);
+            device.destroy_sampler(self.sampler, None);
+        }
     }
 }

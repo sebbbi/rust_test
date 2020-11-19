@@ -268,7 +268,7 @@ fn main() {
         &descriptor_pool,
         &render_pass,
         &view_scissor,
-        &sdf_texture.image,
+        &sdf_texture.descriptor,
     );
 
     // Submit initialization command buffer before rendering starts
