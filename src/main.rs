@@ -286,6 +286,7 @@ fn main() {
         &base.device,
         &base.allocator,
         &descriptor_pool,
+        &base.depth_image_view,
         pyramid_texture_dimensions,
     );
 
@@ -495,9 +496,8 @@ fn main() {
                     &[base.present_complete_semaphore],
                     &[base.rendering_complete_semaphore],
                     |device, command_buffer| {
-                        // Draw (outside main render pass)
+                        // Draw/setup (before main render pass)
                         render_cubes.gpu_draw(device, &command_buffer);
-                        depth_pyramid.gpu_draw(device, &command_buffer, pyramid_dimension);
 
                         // Render pass
                         unsafe {
@@ -516,6 +516,14 @@ fn main() {
                         unsafe {
                             device.cmd_end_render_pass(command_buffer);
                         }
+
+                        // Draw/setup (after main render pass)
+                        depth_pyramid.gpu_draw(
+                            device,
+                            &command_buffer,
+                            &base.depth_image.image,
+                            pyramid_dimension,
+                        );
                     },
                 );
 

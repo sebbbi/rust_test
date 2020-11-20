@@ -44,6 +44,7 @@ impl DepthPyramid {
         device: &Device,
         allocator: &vk_mem::Allocator,
         descriptor_pool: &vk::DescriptorPool,
+        depth_view: &vk::ImageView,
         image_dimensions: (u32, u32),
     ) -> DepthPyramid {
         let alloc_info_cpu = vk_mem::AllocationCreateInfo {
@@ -88,7 +89,7 @@ impl DepthPyramid {
             array_layers: 1,
             samples: vk::SampleCountFlags::TYPE_1,
             tiling: vk::ImageTiling::OPTIMAL,
-            usage: vk::ImageUsageFlags::STORAGE/* | vk::ImageUsageFlags::SAMPLED*/,
+            usage: vk::ImageUsageFlags::STORAGE, /* | vk::ImageUsageFlags::SAMPLED*/
             sharing_mode: vk::SharingMode::EXCLUSIVE,
             ..Default::default()
         };
@@ -133,8 +134,7 @@ impl DepthPyramid {
         let descriptor = vk::DescriptorImageInfo {
             image_layout: vk::ImageLayout::GENERAL,
             image_view: view,
-            ..Default::default()
-            //sampler,
+            ..Default::default() //sampler,
         };
 
         let desc_layout_bindings = [
@@ -147,7 +147,7 @@ impl DepthPyramid {
             },
             vk::DescriptorSetLayoutBinding {
                 binding: 1,
-                descriptor_type: vk::DescriptorType::STORAGE_IMAGE,
+                descriptor_type: vk::DescriptorType::COMBINED_IMAGE_SAMPLER,
                 descriptor_count: 1,
                 stage_flags: vk::ShaderStageFlags::COMPUTE,
                 ..Default::default()
@@ -182,6 +182,12 @@ impl DepthPyramid {
             range: mem::size_of::<DepthPyramidMip0Uniforms>() as u64,
         };
 
+        let depth_image_descriptor = vk::DescriptorImageInfo {
+            image_layout: vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL,
+            image_view: *depth_view,
+            sampler,
+        };
+
         let write_desc_sets = [
             vk::WriteDescriptorSet {
                 dst_set: descriptor_sets[0],
@@ -195,8 +201,8 @@ impl DepthPyramid {
                 dst_set: descriptor_sets[0],
                 dst_binding: 1,
                 descriptor_count: 1,
-                descriptor_type: vk::DescriptorType::STORAGE_IMAGE,
-                p_image_info: &descriptor,
+                descriptor_type: vk::DescriptorType::COMBINED_IMAGE_SAMPLER,
+                p_image_info: &depth_image_descriptor,
                 ..Default::default()
             },
             vk::WriteDescriptorSet {
@@ -264,11 +270,7 @@ impl DepthPyramid {
         }
     }
 
-pub fn gpu_setup(
-        &self,
-        device: &Device,
-        command_buffer: &vk::CommandBuffer,
-    ) {
+    pub fn gpu_setup(&self, device: &Device, command_buffer: &vk::CommandBuffer) {
         // Transition texture to read & write layout
         let texture_barrier = vk::ImageMemoryBarrier {
             dst_access_mask: vk::AccessFlags::SHADER_WRITE,
@@ -304,6 +306,7 @@ pub fn gpu_setup(
         &self,
         device: &Device,
         command_buffer: &vk::CommandBuffer,
+        depth_image: &vk::Image,
         pyramid_mip0_dimension: u32,
     ) {
         let buffer_copy_regions = vk::BufferCopy {
@@ -329,7 +332,40 @@ pub fn gpu_setup(
             ..Default::default()
         };
 
+        let texture_barrier = vk::ImageMemoryBarrier {
+            src_access_mask: vk::AccessFlags::DEPTH_STENCIL_ATTACHMENT_READ
+                | vk::AccessFlags::DEPTH_STENCIL_ATTACHMENT_WRITE,
+            dst_access_mask: vk::AccessFlags::SHADER_READ,
+            old_layout: vk::ImageLayout::DEPTH_STENCIL_ATTACHMENT_OPTIMAL,
+            new_layout: vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL,
+            image: *depth_image,
+            subresource_range: vk::ImageSubresourceRange {
+                aspect_mask: vk::ImageAspectFlags::DEPTH,
+                level_count: 1,
+                layer_count: 1,
+                ..Default::default()
+            },
+            ..Default::default()
+        };
+
+        let layout_transition_barriers = vk::ImageMemoryBarrier {
+            src_access_mask: vk::AccessFlags::SHADER_READ,
+            dst_access_mask: vk::AccessFlags::DEPTH_STENCIL_ATTACHMENT_READ
+                | vk::AccessFlags::DEPTH_STENCIL_ATTACHMENT_WRITE,
+            old_layout: vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL,
+            new_layout: vk::ImageLayout::DEPTH_STENCIL_ATTACHMENT_OPTIMAL,
+            image: *depth_image,
+            subresource_range: vk::ImageSubresourceRange {
+                aspect_mask: vk::ImageAspectFlags::DEPTH,
+                level_count: 1,
+                layer_count: 1,
+                ..Default::default()
+            },
+            ..Default::default()
+        };
+
         unsafe {
+            // Update uniform buffer
             device.cmd_pipeline_barrier(
                 *command_buffer,
                 vk::PipelineStageFlags::BOTTOM_OF_PIPE,
@@ -357,6 +393,24 @@ pub fn gpu_setup(
                 &[],
             );
 
+            // Transition depth buffer to read
+            device.cmd_pipeline_barrier(
+                *command_buffer,
+                vk::PipelineStageFlags::LATE_FRAGMENT_TESTS,
+                vk::PipelineStageFlags::COMPUTE_SHADER,
+                vk::DependencyFlags::empty(),
+                &[],
+                &[],
+                &[texture_barrier],
+            );
+
+            // First pass downsample compute shader
+            device.cmd_bind_pipeline(
+                *command_buffer,
+                vk::PipelineBindPoint::COMPUTE,
+                self.compute_pipeline,
+            );
+
             device.cmd_bind_descriptor_sets(
                 *command_buffer,
                 vk::PipelineBindPoint::COMPUTE,
@@ -366,18 +420,23 @@ pub fn gpu_setup(
                 &[],
             );
 
-            device.cmd_bind_pipeline(
-                *command_buffer,
-                vk::PipelineBindPoint::COMPUTE,
-                self.compute_pipeline,
-            );
-
             let group_dim = (8, 8);
             let dim = (
                 pyramid_mip0_dimension / group_dim.0,
                 pyramid_mip0_dimension / group_dim.1,
             );
             device.cmd_dispatch(*command_buffer, dim.0, dim.1, 1);
+
+            // Transition depth buffer to depth attachment
+            device.cmd_pipeline_barrier(
+                *command_buffer,
+                vk::PipelineStageFlags::COMPUTE_SHADER,
+                vk::PipelineStageFlags::LATE_FRAGMENT_TESTS,
+                vk::DependencyFlags::empty(),
+                &[],
+                &[],
+                &[layout_transition_barriers],
+            );
         }
     }
 
