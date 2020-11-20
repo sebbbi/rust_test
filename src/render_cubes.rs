@@ -396,7 +396,7 @@ impl RenderCubes {
         self.uniform_buffer.copy_from_slice(&[*uniforms], 0);
     }
 
-    pub fn setup(&self, device: &Device, command_buffer: &vk::CommandBuffer) {
+    pub fn gpu_setup(&self, device: &Device, command_buffer: &vk::CommandBuffer) {
         let buffer_copy_regions = vk::BufferCopy {
             src_offset: 0,
             dst_offset: 0,
@@ -450,7 +450,7 @@ impl RenderCubes {
         };
     }
 
-    pub fn draw_setup(&self, device: &Device, command_buffer: &vk::CommandBuffer) {
+    pub fn gpu_draw(&self, device: &Device, command_buffer: &vk::CommandBuffer) {
         let buffer_copy_regions = vk::BufferCopy {
             src_offset: 0,
             dst_offset: 0,
@@ -504,7 +504,7 @@ impl RenderCubes {
         }
     }
 
-    pub fn draw_render_pass(&self, device: &Device, command_buffer: &vk::CommandBuffer) {
+    pub fn gpu_draw_main_render_pass(&self, device: &Device, command_buffer: &vk::CommandBuffer) {
         unsafe {
             device.cmd_bind_descriptor_sets(
                 *command_buffer,
@@ -514,17 +514,20 @@ impl RenderCubes {
                 &self.descriptor_sets[..],
                 &[],
             );
+
             device.cmd_bind_pipeline(
                 *command_buffer,
                 vk::PipelineBindPoint::GRAPHICS,
                 self.graphic_pipeline,
             );
+
             device.cmd_bind_index_buffer(
                 *command_buffer,
                 self.index_buffer_gpu.buffer,
                 0,
                 vk::IndexType::UINT32,
             );
+
             device.cmd_draw_indexed(
                 *command_buffer,
                 self.index_buffer_gpu.size as u32 / std::mem::size_of::<u32>() as u32,

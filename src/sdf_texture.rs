@@ -91,7 +91,7 @@ impl SdfTexture {
 
         let sampler = unsafe { device.create_sampler(&sampler_info, None).unwrap() };
 
-        let tex_image_view_info = vk::ImageViewCreateInfo {
+        let view_info = vk::ImageViewCreateInfo {
             view_type: vk::ImageViewType::TYPE_3D,
             format: texture_create_info.format,
             components: vk::ComponentMapping {
@@ -109,12 +109,11 @@ impl SdfTexture {
             image: image.image,
             ..Default::default()
         };
-        let tex_image_view =
-            unsafe { device.create_image_view(&tex_image_view_info, None) }.unwrap();
+        let view = unsafe { device.create_image_view(&view_info, None) }.unwrap();
 
-        let tex_descriptor = vk::DescriptorImageInfo {
+        let descriptor = vk::DescriptorImageInfo {
             image_layout: vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL,
-            image_view: tex_image_view,
+            image_view: view,
             sampler,
         };
 
@@ -122,12 +121,12 @@ impl SdfTexture {
             image,
             upload_buffer,
             sampler,
-            view: tex_image_view,
-            descriptor: tex_descriptor,
+            view,
+            descriptor,
         }
     }
 
-    pub fn setup(
+    pub fn gpu_setup(
         &self,
         device: &Device,
         command_buffer: &vk::CommandBuffer,

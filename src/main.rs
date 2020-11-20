@@ -1,6 +1,8 @@
 #![allow(dead_code)]
 
 const SDF_LEVELS: u32 = 6;
+const NUM_DESCRIPTORS_PER_TYPE: u32 = 1024;
+const NUM_DESCRIPTOR_SETS: u32 = 1024;
 
 extern crate winit;
 
@@ -25,6 +27,7 @@ use winit::{
     window::WindowBuilder,
 };
 
+use depth_pyramid::*;
 use minivector::*;
 use render_cubes::*;
 use sdf::*;
@@ -233,20 +236,24 @@ fn main() {
     let descriptor_sizes = [
         vk::DescriptorPoolSize {
             ty: vk::DescriptorType::UNIFORM_BUFFER,
-            descriptor_count: 1,
+            descriptor_count: NUM_DESCRIPTORS_PER_TYPE,
         },
         vk::DescriptorPoolSize {
             ty: vk::DescriptorType::STORAGE_BUFFER,
-            descriptor_count: 1,
+            descriptor_count: NUM_DESCRIPTORS_PER_TYPE,
+        },
+        vk::DescriptorPoolSize {
+            ty: vk::DescriptorType::STORAGE_IMAGE,
+            descriptor_count: NUM_DESCRIPTORS_PER_TYPE,
         },
         vk::DescriptorPoolSize {
             ty: vk::DescriptorType::COMBINED_IMAGE_SAMPLER,
-            descriptor_count: 1,
+            descriptor_count: NUM_DESCRIPTORS_PER_TYPE,
         },
     ];
     let descriptor_pool_info = vk::DescriptorPoolCreateInfo::builder()
         .pool_sizes(&descriptor_sizes)
-        .max_sets(1);
+        .max_sets(NUM_DESCRIPTOR_SETS);
 
     let descriptor_pool = unsafe {
         base.device
@@ -272,6 +279,16 @@ fn main() {
         &sdf_texture.descriptor,
     );
 
+    // Depth pyramid for occlusion culling
+    let pyramid_dimension = 512;
+    let pyramid_texture_dimensions = (pyramid_dimension * 3 / 2, pyramid_dimension);
+    let depth_pyramid = DepthPyramid::new(
+        &base.device,
+        &base.allocator,
+        &descriptor_pool,
+        pyramid_texture_dimensions,
+    );
+
     // Submit initialization command buffer before rendering starts
     base.record_submit_commandbuffer(
         0,
@@ -280,11 +297,10 @@ fn main() {
         &[],
         &[],
         |device, command_buffer| {
-            // Setup cube renderer
-            render_cubes.setup(device, &command_buffer);
-
-            // Setup SDF volume texture
-            sdf_texture.setup(device, &command_buffer, &sdf_levels);
+            // GPU setup commands
+            render_cubes.gpu_setup(device, &command_buffer);
+            sdf_texture.gpu_setup(device, &command_buffer, &sdf_levels);
+            depth_pyramid.gpu_setup(device, &command_buffer);
         },
     );
 
@@ -430,7 +446,7 @@ fn main() {
                     10000000.0,
                 );
 
-                let uniforms = CubeUniforms {
+                let cube_uniforms = CubeUniforms {
                     world_to_screen,
                     color,
                     camera_position: camera.position.to_4d(),
@@ -439,7 +455,13 @@ fn main() {
                     texel_scale: texel_scale.to_4d(),
                 };
 
-                render_cubes.update(&uniforms);
+                let pyramid_uniforms = DepthPyramidMip0Uniforms {
+                    src_dimensions: (window_width, window_height),
+                    dst_dimensions: pyramid_dimension,
+                };
+
+                render_cubes.update(&cube_uniforms);
+                depth_pyramid.update(&pyramid_uniforms);
 
                 // Setup render passs
                 let clear_values = [
@@ -473,8 +495,9 @@ fn main() {
                     &[base.present_complete_semaphore],
                     &[base.rendering_complete_semaphore],
                     |device, command_buffer| {
-                        // Setup
-                        render_cubes.draw_setup(device, &command_buffer);
+                        // Draw (outside main render pass)
+                        render_cubes.gpu_draw(device, &command_buffer);
+                        depth_pyramid.gpu_draw(device, &command_buffer, pyramid_dimension);
 
                         // Render pass
                         unsafe {
@@ -487,7 +510,8 @@ fn main() {
                             device.cmd_set_scissor(command_buffer, 0, &[view_scissor.scissor]);
                         }
 
-                        render_cubes.draw_render_pass(device, &command_buffer);
+                        // Draw (main render pass)
+                        render_cubes.gpu_draw_main_render_pass(device, &command_buffer);
 
                         unsafe {
                             device.cmd_end_render_pass(command_buffer);
@@ -582,6 +606,7 @@ fn main() {
     // Cleanup
     render_cubes.destroy(&base.device, &base.allocator);
     sdf_texture.destroy(&base.device, &base.allocator);
+    depth_pyramid.destroy(&base.device, &base.allocator);
     unsafe {
         base.device.destroy_descriptor_pool(descriptor_pool, None);
         for framebuffer in framebuffers {

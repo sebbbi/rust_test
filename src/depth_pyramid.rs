@@ -15,8 +15,14 @@ use crate::vulkan_helpers::*;
 
 #[derive(Clone, Copy)]
 pub struct DepthPyramidUniforms {
-    pub dimensions: u32,
+    pub dimensions: u32, // pow2 y dimension of mip 0 (texture x is 1.5x wider)
     pub mip: u32,
+}
+
+#[derive(Clone, Copy)]
+pub struct DepthPyramidMip0Uniforms {
+    pub src_dimensions: (u32, u32),
+    pub dst_dimensions: u32, // pow2 y dimension of mip 0 (texture x is 1.5x wider)
 }
 
 pub struct DepthPyramid {
@@ -52,7 +58,7 @@ impl DepthPyramid {
         };
 
         let uniform_buffer_info = vk::BufferCreateInfo {
-            size: std::mem::size_of::<DepthPyramidUniforms>() as u64,
+            size: std::mem::size_of::<DepthPyramidMip0Uniforms>() as u64,
             usage: vk::BufferUsageFlags::TRANSFER_SRC,
             sharing_mode: vk::SharingMode::EXCLUSIVE,
             ..Default::default()
@@ -61,7 +67,7 @@ impl DepthPyramid {
         let uniform_buffer = VkBuffer::new(allocator, &uniform_buffer_info, &alloc_info_cpu);
 
         let uniform_buffer_gpu_info = vk::BufferCreateInfo {
-            size: std::mem::size_of::<DepthPyramidUniforms>() as u64,
+            size: std::mem::size_of::<DepthPyramidMip0Uniforms>() as u64,
             usage: vk::BufferUsageFlags::TRANSFER_DST | vk::BufferUsageFlags::UNIFORM_BUFFER,
             sharing_mode: vk::SharingMode::EXCLUSIVE,
             ..Default::default()
@@ -82,7 +88,7 @@ impl DepthPyramid {
             array_layers: 1,
             samples: vk::SampleCountFlags::TYPE_1,
             tiling: vk::ImageTiling::OPTIMAL,
-            usage: vk::ImageUsageFlags::TRANSFER_DST | vk::ImageUsageFlags::SAMPLED,
+            usage: vk::ImageUsageFlags::STORAGE/* | vk::ImageUsageFlags::SAMPLED*/,
             sharing_mode: vk::SharingMode::EXCLUSIVE,
             ..Default::default()
         };
@@ -125,9 +131,10 @@ impl DepthPyramid {
         let view = unsafe { device.create_image_view(&view_info, None) }.unwrap();
 
         let descriptor = vk::DescriptorImageInfo {
-            image_layout: vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL,
+            image_layout: vk::ImageLayout::GENERAL,
             image_view: view,
-            sampler,
+            ..Default::default()
+            //sampler,
         };
 
         let desc_layout_bindings = [
@@ -135,21 +142,21 @@ impl DepthPyramid {
                 binding: 0,
                 descriptor_type: vk::DescriptorType::UNIFORM_BUFFER,
                 descriptor_count: 1,
-                stage_flags: vk::ShaderStageFlags::FRAGMENT | vk::ShaderStageFlags::VERTEX,
+                stage_flags: vk::ShaderStageFlags::COMPUTE,
                 ..Default::default()
             },
             vk::DescriptorSetLayoutBinding {
                 binding: 1,
-                descriptor_type: vk::DescriptorType::STORAGE_BUFFER,
+                descriptor_type: vk::DescriptorType::STORAGE_IMAGE,
                 descriptor_count: 1,
-                stage_flags: vk::ShaderStageFlags::FRAGMENT | vk::ShaderStageFlags::VERTEX,
+                stage_flags: vk::ShaderStageFlags::COMPUTE,
                 ..Default::default()
             },
             vk::DescriptorSetLayoutBinding {
                 binding: 2,
-                descriptor_type: vk::DescriptorType::COMBINED_IMAGE_SAMPLER,
+                descriptor_type: vk::DescriptorType::STORAGE_IMAGE,
                 descriptor_count: 1,
-                stage_flags: vk::ShaderStageFlags::FRAGMENT | vk::ShaderStageFlags::VERTEX,
+                stage_flags: vk::ShaderStageFlags::COMPUTE,
                 ..Default::default()
             },
         ];
@@ -172,7 +179,7 @@ impl DepthPyramid {
         let uniform_buffer_descriptor = vk::DescriptorBufferInfo {
             buffer: uniform_buffer_gpu.buffer,
             offset: 0,
-            range: mem::size_of::<DepthPyramidUniforms>() as u64,
+            range: mem::size_of::<DepthPyramidMip0Uniforms>() as u64,
         };
 
         let write_desc_sets = [
@@ -188,7 +195,7 @@ impl DepthPyramid {
                 dst_set: descriptor_sets[0],
                 dst_binding: 1,
                 descriptor_count: 1,
-                descriptor_type: vk::DescriptorType::COMBINED_IMAGE_SAMPLER,
+                descriptor_type: vk::DescriptorType::STORAGE_IMAGE,
                 p_image_info: &descriptor,
                 ..Default::default()
             },
@@ -196,7 +203,7 @@ impl DepthPyramid {
                 dst_set: descriptor_sets[0],
                 dst_binding: 2,
                 descriptor_count: 1,
-                descriptor_type: vk::DescriptorType::COMBINED_IMAGE_SAMPLER,
+                descriptor_type: vk::DescriptorType::STORAGE_IMAGE,
                 p_image_info: &descriptor,
                 ..Default::default()
             },
@@ -210,7 +217,7 @@ impl DepthPyramid {
             unsafe { device.create_pipeline_layout(&layout_create_info, None) }.unwrap();
 
         let mut comp_spv_file =
-            Cursor::new(&include_bytes!("../shader/depth_pyramid_downsample.spv"));
+            Cursor::new(&include_bytes!("../shader/depth_pyramid_first_mip.spv"));
 
         let comp_code =
             read_spv(&mut comp_spv_file).expect("Failed to read compute shader spv file");
@@ -257,11 +264,48 @@ impl DepthPyramid {
         }
     }
 
-    pub fn update(&self, uniforms: &DepthPyramidUniforms) {
+pub fn gpu_setup(
+        &self,
+        device: &Device,
+        command_buffer: &vk::CommandBuffer,
+    ) {
+        // Transition texture to read & write layout
+        let texture_barrier = vk::ImageMemoryBarrier {
+            dst_access_mask: vk::AccessFlags::SHADER_WRITE,
+            new_layout: vk::ImageLayout::GENERAL,
+            image: self.image.image,
+            subresource_range: vk::ImageSubresourceRange {
+                aspect_mask: vk::ImageAspectFlags::COLOR,
+                level_count: 1,
+                layer_count: 1,
+                ..Default::default()
+            },
+            ..Default::default()
+        };
+
+        unsafe {
+            device.cmd_pipeline_barrier(
+                *command_buffer,
+                vk::PipelineStageFlags::TOP_OF_PIPE,
+                vk::PipelineStageFlags::COMPUTE_SHADER,
+                vk::DependencyFlags::empty(),
+                &[],
+                &[],
+                &[texture_barrier],
+            );
+        };
+    }
+
+    pub fn update(&self, uniforms: &DepthPyramidMip0Uniforms) {
         self.uniform_buffer.copy_from_slice(&[*uniforms], 0);
     }
 
-    pub fn draw_setup(&self, device: &Device, command_buffer: &vk::CommandBuffer) {
+    pub fn gpu_draw(
+        &self,
+        device: &Device,
+        command_buffer: &vk::CommandBuffer,
+        pyramid_mip0_dimension: u32,
+    ) {
         let buffer_copy_regions = vk::BufferCopy {
             src_offset: 0,
             dst_offset: 0,
@@ -312,30 +356,28 @@ impl DepthPyramid {
                 &[buffer_barrier_end],
                 &[],
             );
-        }
-    }
 
-    pub fn draw_render_pass(
-        &self,
-        device: &Device,
-        command_buffer: &vk::CommandBuffer,
-        dimensions: (u32, u32),
-    ) {
-        unsafe {
             device.cmd_bind_descriptor_sets(
                 *command_buffer,
-                vk::PipelineBindPoint::GRAPHICS,
+                vk::PipelineBindPoint::COMPUTE,
                 self.pipeline_layout,
                 0,
                 &self.descriptor_sets[..],
                 &[],
             );
+
             device.cmd_bind_pipeline(
                 *command_buffer,
                 vk::PipelineBindPoint::COMPUTE,
                 self.compute_pipeline,
             );
-            device.cmd_dispatch(*command_buffer, dimensions.0, dimensions.1, 1);
+
+            let group_dim = (8, 8);
+            let dim = (
+                pyramid_mip0_dimension / group_dim.0,
+                pyramid_mip0_dimension / group_dim.1,
+            );
+            device.cmd_dispatch(*command_buffer, dim.0, dim.1, 1);
         }
     }
 
