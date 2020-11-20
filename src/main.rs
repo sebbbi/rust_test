@@ -4,6 +4,7 @@ const SDF_LEVELS: u32 = 6;
 
 extern crate winit;
 
+mod depth_pyramid;
 mod minivector;
 mod render_cubes;
 mod sdf;
