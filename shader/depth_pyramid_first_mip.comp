@@ -4,9 +4,13 @@
 
 layout (local_size_x = 8, local_size_y = 8) in;
 
+layout(push_constant) uniform PushConstants {
+    uint mip;
+} push;
+
 layout (binding = 0) uniform UBO {
-	uvec2 src_dimensions;
-    uint dst_dimensions;	// pow2 y dimension of mip 0 (texture x is 1.5x wider)
+	uvec2 depth_buffer_dimensions;
+    uint depth_pyramid_dimension;	// pow2 y dimension of mip 0 (texture x is 1.5x wider)
 } ubo;
 
 layout (binding = 1) uniform sampler2D src_tex;
@@ -14,7 +18,7 @@ layout (binding = 2, r32f) uniform writeonly image2D dst_tex;
 
 void main() {
     ivec2 xy = ivec2(gl_GlobalInvocationID.xy);
-    vec2 step = vec2(ubo.src_dimensions) / float(ubo.dst_dimensions);
+    vec2 step = vec2(ubo.depth_buffer_dimensions) / float(ubo.depth_pyramid_dimension);
     
     ivec2 rect_min = ivec2(vec2(xy) * step);
     ivec2 rect_max = ivec2(vec2(xy + ivec2(1, 1)) * step);

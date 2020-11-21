@@ -4,7 +4,7 @@ extern crate vk_mem;
 pub use ash::version::{DeviceV1_0, EntryV1_0, InstanceV1_0};
 use ash::vk;
 use std::ptr;
-use std::slice::from_raw_parts_mut;
+use std::slice::{from_raw_parts, from_raw_parts_mut};
 use vk_mem::{Allocator, MemoryUsage};
 
 pub struct VkBuffer {
@@ -95,4 +95,16 @@ impl VkImage {
 pub struct VkViewScissor {
     pub viewport: vk::Viewport,
     pub scissor: vk::Rect2D,
+}
+
+pub fn raw_bytes<T>(data: &[T]) -> &[u8]
+where
+    T: Copy,
+{
+    unsafe {
+        from_raw_parts(
+            data.as_ptr() as *const u8,
+            data.len() * std::mem::size_of::<T>(),
+        )
+    }
 }

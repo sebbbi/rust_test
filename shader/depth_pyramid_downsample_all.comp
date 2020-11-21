@@ -4,13 +4,17 @@
 
 layout (local_size_x = 8, local_size_y = 8) in;
 
-layout (binding = 0) uniform UBO {
-	uint dimensions;	// pow2 y dimension of mip 0 (texture x is 1.5x wider)
-    uint mips;
-} ubo; 
+layout(push_constant) uniform PushConstants {
+    uint mip;
+} push;
 
-coherent layout (binding = 1, r32f) uniform image2D tex;
-coherent layout (binding = 2, r32ui) uniform uimage2D counters;	// NxN/8x8 texels (one level)
+layout (binding = 0) uniform UBO {
+	uvec2 depth_buffer_dimensions;
+    uint depth_pyramid_dimension;	// pow2 y dimension of mip 0 (texture x is 1.5x wider)
+} ubo;
+
+coherent layout (binding = 2, r32f) uniform image2D tex;
+coherent layout (binding = 3, r32ui) uniform uimage2D counters;	// NxN/8x8 texels (one level)
 shared uint counter_return;
 
 uvec4 calculate_mip_rect(uint dimensions, uint mip)
@@ -29,12 +33,12 @@ void main() {
     uvec2 xy_group = uvec2(gl_WorkGroupID.xy);
     uvec2 xy_local = uvec2(gl_LocalInvocationID.xy);
 
-    for (uint mip = 0; mip < ubo.mips; mip++)
+    for (uint mip = 0; mip < push.mip; mip++)
     {
         uvec2 xy = xy_group * 8 + xy_local;
  
-        uvec4 src_rect = calculate_mip_rect(ubo.dimensions, mip);
-        uvec4 dst_rect = calculate_mip_rect(ubo.dimensions, mip + 1);
+        uvec4 src_rect = calculate_mip_rect(ubo.depth_pyramid_dimension, mip);
+        uvec4 dst_rect = calculate_mip_rect(ubo.depth_pyramid_dimension, mip + 1);
 
         // Could use image gather instead of 4 loads...
         uvec2 xy2 = 2 * xy;

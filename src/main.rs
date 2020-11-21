@@ -281,6 +281,7 @@ fn main() {
 
     // Depth pyramid for occlusion culling
     let pyramid_dimension = 512;
+    let pyramid_mips = 7;
     let pyramid_texture_dimensions = (pyramid_dimension * 3 / 2, pyramid_dimension);
     let depth_pyramid = DepthPyramid::new(
         &base.device,
@@ -456,9 +457,9 @@ fn main() {
                     texel_scale: texel_scale.to_4d(),
                 };
 
-                let pyramid_uniforms = DepthPyramidMip0Uniforms {
-                    src_dimensions: (window_width, window_height),
-                    dst_dimensions: pyramid_dimension,
+                let pyramid_uniforms = DepthPyramidUniforms {
+                    depth_buffer_dimensions: (window_width, window_height),
+                    depth_pyramid_dimension: pyramid_dimension,
                 };
 
                 render_cubes.update(&cube_uniforms);
@@ -523,6 +524,7 @@ fn main() {
                             &command_buffer,
                             &base.depth_image.image,
                             pyramid_dimension,
+                            pyramid_mips,
                         );
                     },
                 );
