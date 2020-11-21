@@ -4,12 +4,16 @@
 
 layout (local_size_x = 8, local_size_y = 8) in;
 
-layout (binding = 0) uniform UBO {
-	uint dimensions;	// pow2 y dimension of mip 0 (texture x is 1.5x wider)
+layout(push_constant) uniform PushConstants {
     uint mip;
+} push;
+
+layout (binding = 0) uniform UBO {
+	uvec2 depth_buffer_dimensions;
+    uint depth_pyramid_dimension;	// pow2 y dimension of mip 0 (texture x is 1.5x wider)
 } ubo;
 
-layout (binding = 1, r32f) uniform image2D tex;
+layout (binding = 2, r32f) uniform image2D tex;
 
 uvec4 calculate_mip_rect(uint dimensions, uint mip)
 {
@@ -25,8 +29,8 @@ uvec4 calculate_mip_rect(uint dimensions, uint mip)
 
 void main() {
     uvec2 xy = uvec2(gl_GlobalInvocationID.xy);
-    uvec4 src_rect = calculate_mip_rect(ubo.dimensions, ubo.mip);
-    uvec4 dst_rect = calculate_mip_rect(ubo.dimensions, ubo.mip + 1);
+    uvec4 src_rect = calculate_mip_rect(ubo.depth_pyramid_dimension, push.mip);
+    uvec4 dst_rect = calculate_mip_rect(ubo.depth_pyramid_dimension, push.mip + 1);
         
     // Could use image gather instead of 4 loads...
     uvec2 xy2 = 2 * xy;
