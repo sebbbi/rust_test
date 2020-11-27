@@ -16,7 +16,7 @@ struct InstanceData
 	vec4 position;
 };
 
-layout(std140, binding = 1) buffer Instances
+layout(std430, binding = 1) buffer Instances
 {
     InstanceData instances[];
 };
