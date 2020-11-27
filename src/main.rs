@@ -7,6 +7,7 @@ const NUM_DESCRIPTOR_SETS: u32 = 1024;
 extern crate winit;
 
 mod depth_pyramid;
+mod instances;
 mod minivector;
 mod render_cubes;
 mod sdf;
@@ -28,6 +29,7 @@ use winit::{
 };
 
 use depth_pyramid::*;
+use instances::*;
 use minivector::*;
 use render_cubes::*;
 use sdf::*;
@@ -269,6 +271,9 @@ fn main() {
         sdf_total_voxels as usize,
     );
 
+    // Cube instances
+    let instances = Instances::new(&base.device, &base.allocator);
+
     // Cube renderer
     let render_cubes = RenderCubes::new(
         &base.device,
@@ -277,6 +282,8 @@ fn main() {
         &render_pass,
         &view_scissor,
         &sdf_texture.descriptor,
+        &instances.instances_buffer_descriptor,
+        NUM_INSTANCES,
     );
 
     // Depth pyramid for occlusion culling
@@ -614,6 +621,7 @@ fn main() {
     unsafe { base.device.device_wait_idle() }.unwrap();
 
     // Cleanup
+    instances.destroy(&base.device, &base.allocator);
     render_cubes.destroy(&base.device, &base.allocator);
     sdf_texture.destroy(&base.device, &base.allocator);
     depth_pyramid.destroy(&base.device, &base.allocator);

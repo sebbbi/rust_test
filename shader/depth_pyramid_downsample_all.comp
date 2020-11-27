@@ -66,6 +66,6 @@ void main() {
  
         // For each 2x2 group tile, the last one to finish lives to the next mip level. Other 3 die.
         // This branch is guaranteed to kill the whole group, as it's based on groupshared value
-        if (((counter_return >> (mip*2)) & 2) < 3) return;
+        if (((counter_return >> (mip*2)) & 3) < 3) return;
     }
 }

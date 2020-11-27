@@ -1,8 +1,6 @@
 const SIMPLE_FRAGMENT_SHADER: bool = false;
 const CUBE_BACKFACE_OPTIMIZATION: bool = true;
-const NUM_INSTANCES: usize = 1024 * 1024;
 
-use rand::Rng;
 use std::default::Default;
 use std::ffi::CString;
 use std::io::Cursor;
@@ -29,7 +27,6 @@ pub struct RenderCubes {
     pub pipeline_layout: vk::PipelineLayout,
     pub index_buffer: VkBuffer,
     pub index_buffer_gpu: VkBuffer,
-    pub instances_buffer: VkBuffer,
     pub uniform_buffer: VkBuffer,
     pub uniform_buffer_gpu: VkBuffer,
     pub desc_set_layout: vk::DescriptorSetLayout,
@@ -40,6 +37,7 @@ pub struct RenderCubes {
 }
 
 impl RenderCubes {
+    #[allow(clippy::too_many_arguments)]
     pub fn new(
         device: &Device,
         allocator: &vk_mem::Allocator,
@@ -47,6 +45,8 @@ impl RenderCubes {
         render_pass: &vk::RenderPass,
         view_scissor: &VkViewScissor,
         sdf_texture_descriptor: &vk::DescriptorImageInfo,
+        instances_buffer_descriptor: &vk::DescriptorBufferInfo,
+        num_instances: usize,
     ) -> RenderCubes {
         let alloc_info_cpu = vk_mem::AllocationCreateInfo {
             usage: vk_mem::MemoryUsage::CpuOnly,
@@ -56,12 +56,6 @@ impl RenderCubes {
 
         let alloc_info_gpu = vk_mem::AllocationCreateInfo {
             usage: vk_mem::MemoryUsage::GpuOnly,
-            ..Default::default()
-        };
-
-        let alloc_info_cpu_to_gpu = vk_mem::AllocationCreateInfo {
-            usage: vk_mem::MemoryUsage::CpuToGpu,
-            flags: vk_mem::AllocationCreateFlags::MAPPED,
             ..Default::default()
         };
 
@@ -82,7 +76,7 @@ impl RenderCubes {
             7, 1, 3, 7, 5, 1,
         ];
 
-        let num_indices = NUM_INSTANCES * NUM_CUBE_INDICES;
+        let num_indices = num_instances * NUM_CUBE_INDICES;
 
         let index_buffer_data: Vec<u32> = (0..num_indices)
             .map(|i| {
@@ -110,26 +104,6 @@ impl RenderCubes {
         };
 
         let index_buffer_gpu = VkBuffer::new(allocator, &index_buffer_gpu_info, &alloc_info_gpu);
-
-        #[derive(Clone, Copy)]
-        struct InstanceData {
-            position: Vec4,
-        }
-
-        #[derive(Clone, Copy)]
-        struct InstanceDatas {
-            instances: [InstanceData; NUM_INSTANCES],
-        }
-
-        let instances_buffer_info = vk::BufferCreateInfo {
-            size: std::mem::size_of::<InstanceDatas>() as u64,
-            usage: vk::BufferUsageFlags::STORAGE_BUFFER,
-            sharing_mode: vk::SharingMode::EXCLUSIVE,
-            ..Default::default()
-        };
-
-        let instances_buffer =
-            VkBuffer::new(allocator, &instances_buffer_info, &alloc_info_cpu_to_gpu);
 
         let uniform_buffer_info = vk::BufferCreateInfo {
             size: std::mem::size_of::<CubeUniforms>() as u64,
@@ -195,12 +169,6 @@ impl RenderCubes {
             range: mem::size_of::<CubeUniforms>() as u64,
         };
 
-        let storage_buffer_descriptor = vk::DescriptorBufferInfo {
-            buffer: instances_buffer.buffer,
-            offset: 0,
-            range: mem::size_of::<InstanceDatas>() as u64,
-        };
-
         let write_desc_sets = [
             vk::WriteDescriptorSet {
                 dst_set: descriptor_sets[0],
@@ -215,7 +183,7 @@ impl RenderCubes {
                 dst_binding: 1,
                 descriptor_count: 1,
                 descriptor_type: vk::DescriptorType::STORAGE_BUFFER,
-                p_buffer_info: &storage_buffer_descriptor,
+                p_buffer_info: instances_buffer_descriptor,
                 ..Default::default()
             },
             vk::WriteDescriptorSet {
@@ -362,26 +330,10 @@ impl RenderCubes {
 
         let graphic_pipeline = graphics_pipelines[0];
 
-        // Random cloud of SDF box instances
-        let mut rng = rand::thread_rng();
-        let instances_buffer_data: Vec<InstanceData> = (0..NUM_INSTANCES)
-            .map(|_i| InstanceData {
-                position: Vec4 {
-                    x: rng.gen_range(-8000.0, 8000.0),
-                    y: rng.gen_range(-8000.0, 8000.0),
-                    z: rng.gen_range(-8000.0, 8000.0),
-                    w: 1.0,
-                },
-            })
-            .collect();
-
-        instances_buffer.copy_from_slice(&instances_buffer_data[..], 0);
-
         RenderCubes {
             pipeline_layout,
             index_buffer,
             index_buffer_gpu,
-            instances_buffer,
             uniform_buffer,
             uniform_buffer_gpu,
             desc_set_layout,
@@ -549,7 +501,6 @@ impl RenderCubes {
             self.index_buffer_gpu.destroy(&allocator);
             self.uniform_buffer.destroy(&allocator);
             self.uniform_buffer_gpu.destroy(&allocator);
-            self.instances_buffer.destroy(&allocator);
             device.destroy_descriptor_set_layout(self.desc_set_layout, None);
         }
     }

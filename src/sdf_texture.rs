@@ -1,10 +1,5 @@
-const SIMPLE_FRAGMENT_SHADER: bool = false;
-const CUBE_BACKFACE_OPTIMIZATION: bool = true;
-const NUM_INSTANCES: usize = 1024 * 1024;
-
-use std::default::Default;
-
 use ash::{vk, Device};
+use std::default::Default;
 
 use crate::vulkan_base::*;
 use crate::vulkan_helpers::*;
