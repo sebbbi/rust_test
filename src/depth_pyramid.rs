@@ -27,7 +27,8 @@ pub struct DepthPyramid {
     pub image: VkImage,
     pub sampler: vk::Sampler,
     pub view: vk::ImageView,
-    pub descriptor: vk::DescriptorImageInfo,
+    pub descriptor_rw: vk::DescriptorImageInfo,
+    pub descriptor_sample: vk::DescriptorImageInfo,
     pub desc_set_layout: vk::DescriptorSetLayout,
     pub descriptor_sets: Vec<vk::DescriptorSet>,
     pub compute_pipeline_pass_1: vk::Pipeline,
@@ -86,7 +87,7 @@ impl DepthPyramid {
             array_layers: 1,
             samples: vk::SampleCountFlags::TYPE_1,
             tiling: vk::ImageTiling::OPTIMAL,
-            usage: vk::ImageUsageFlags::STORAGE, /* | vk::ImageUsageFlags::SAMPLED*/
+            usage: vk::ImageUsageFlags::STORAGE | vk::ImageUsageFlags::SAMPLED,
             sharing_mode: vk::SharingMode::EXCLUSIVE,
             ..Default::default()
         };
@@ -128,10 +129,16 @@ impl DepthPyramid {
         };
         let view = unsafe { device.create_image_view(&view_info, None) }.unwrap();
 
-        let descriptor = vk::DescriptorImageInfo {
+        let descriptor_rw = vk::DescriptorImageInfo {
             image_layout: vk::ImageLayout::GENERAL,
             image_view: view,
             ..Default::default() //sampler,
+        };
+
+        let descriptor_sample = vk::DescriptorImageInfo {
+            image_layout: vk::ImageLayout::GENERAL,
+            image_view: view,
+            sampler,
         };
 
         let desc_layout_bindings = [
@@ -214,7 +221,7 @@ impl DepthPyramid {
                 dst_binding: 2,
                 descriptor_count: 1,
                 descriptor_type: vk::DescriptorType::STORAGE_IMAGE,
-                p_image_info: &descriptor,
+                p_image_info: &descriptor_rw,
                 ..Default::default()
             },
             vk::WriteDescriptorSet {
@@ -222,7 +229,7 @@ impl DepthPyramid {
                 dst_binding: 3,
                 descriptor_count: 1,
                 descriptor_type: vk::DescriptorType::STORAGE_IMAGE,
-                p_image_info: &descriptor,
+                p_image_info: &descriptor_rw,
                 ..Default::default()
             },
         ];
@@ -317,7 +324,8 @@ impl DepthPyramid {
             image,
             sampler,
             view,
-            descriptor,
+            descriptor_rw,
+            descriptor_sample,
             compute_pipeline_pass_1,
             compute_pipeline_downsample,
             compute_shader_module_pass_1,

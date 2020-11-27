@@ -7,3 +7,5 @@ glslc.exe shader/simple.frag -o shader/simple_frag.spv
 glslc.exe shader/depth_pyramid_first_mip.comp -o shader/depth_pyramid_first_mip.spv
 glslc.exe shader/depth_pyramid_downsample.comp -o shader/depth_pyramid_downsample.spv
 glslc.exe shader/depth_pyramid_downsample_all.comp -o shader/depth_pyramid_downsample_all.spv
+
+glslc.exe shader/culling.comp -o shader/culling.spv

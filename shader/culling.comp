@@ -1,0 +1,50 @@
+#version 450
+#extension GL_ARB_separate_shader_objects : enable
+#extension GL_ARB_shading_language_420pack : enable
+
+layout (local_size_x = 64) in;
+
+struct InstanceData
+{
+	vec4 position;
+};
+
+struct VisibilityData
+{
+	uint index;
+};
+
+layout (binding = 0) uniform UBO {
+    uint depth_pyramid_dimension;	// pow2 y dimension of mip 0 (texture x is 1.5x wider)
+    mat4 world_to_screen;
+} ubo;
+
+layout (binding = 1) uniform sampler2D depth_pyramid;
+
+layout(std430, binding = 2) buffer Instances
+{
+    InstanceData instances[];
+};
+
+layout(std430, binding = 3) buffer Visibility
+{
+    VisibilityData visibility[];
+};
+
+vec4 calculate_mip_rect(uint dimensions, uint mip)
+{
+    float inv_mip_exp2 = exp2(-mip);
+    float x_scale = (2.0 / 3.0);
+    vec4 uv_rect = vec4(0.0, 0.0, inv_mip_exp2 * x_scale, inv_mip_exp2);
+    if (mip > 0)
+    {
+        uv_rect.x = x_scale;
+        uv_rect.y = 1.0 - inv_mip_exp2 * 2.0;
+    }
+    return uv_rect;
+}
+
+void main() {
+    int i = int(gl_GlobalInvocationID.x);
+    visibility[i].index = uint(instances[i].position.x);
+}

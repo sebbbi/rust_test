@@ -6,17 +6,18 @@ use std::mem;
 use ash::util::*;
 use ash::{vk, Device};
 
+use crate::minivector::*;
 use crate::vulkan_base::*;
 use crate::vulkan_helpers::*;
 
 #[derive(Clone, Copy)]
-pub struct CullingPushConstants {
-    pub mip: u32,
+pub struct VisibilityData {
+    pub index: u32,
 }
 
 #[derive(Clone, Copy)]
 pub struct CullingUniforms {
-    pub depth_buffer_dimensions: (u32, u32),
+    pub world_to_screen: Mat4x4,
     pub depth_pyramid_dimension: u32, // pow2 y dimension of mip 0 (texture x is 1.5x wider)
 }
 
@@ -24,6 +25,7 @@ pub struct Culling {
     pub pipeline_layout: vk::PipelineLayout,
     pub uniform_buffer: VkBuffer,
     pub uniform_buffer_gpu: VkBuffer,
+    pub visibility_buffer: VkBuffer,
     pub desc_set_layout: vk::DescriptorSetLayout,
     pub descriptor_sets: Vec<vk::DescriptorSet>,
     pub compute_pipeline: vk::Pipeline,
@@ -35,8 +37,9 @@ impl Culling {
         device: &Device,
         allocator: &vk_mem::Allocator,
         descriptor_pool: &vk::DescriptorPool,
-        depth_pyramid_view: &vk::ImageView,
-        depth_pyramid_dimension: u32,
+        depth_pyramid_descriptor: &vk::DescriptorImageInfo,
+        instances_buffer_descriptor: &vk::DescriptorBufferInfo,
+        num_instances: usize,
     ) -> Culling {
         let alloc_info_cpu = vk_mem::AllocationCreateInfo {
             usage: vk_mem::MemoryUsage::CpuOnly,
@@ -49,8 +52,23 @@ impl Culling {
             ..Default::default()
         };
 
+        let visibility_buffer_info = vk::BufferCreateInfo {
+            size: (std::mem::size_of::<VisibilityData>() * num_instances) as u64,
+            usage: vk::BufferUsageFlags::STORAGE_BUFFER,
+            sharing_mode: vk::SharingMode::EXCLUSIVE,
+            ..Default::default()
+        };
+
+        let visibility_buffer = VkBuffer::new(allocator, &visibility_buffer_info, &alloc_info_gpu);
+
+        let visibility_buffer_descriptor = vk::DescriptorBufferInfo {
+            buffer: visibility_buffer.buffer,
+            offset: 0,
+            range: (std::mem::size_of::<VisibilityData>() * num_instances) as u64,
+        };
+
         let uniform_buffer_info = vk::BufferCreateInfo {
-            size: std::mem::size_of::<DepthPyramidUniforms>() as u64,
+            size: std::mem::size_of::<CullingUniforms>() as u64,
             usage: vk::BufferUsageFlags::TRANSFER_SRC,
             sharing_mode: vk::SharingMode::EXCLUSIVE,
             ..Default::default()
@@ -59,7 +77,7 @@ impl Culling {
         let uniform_buffer = VkBuffer::new(allocator, &uniform_buffer_info, &alloc_info_cpu);
 
         let uniform_buffer_gpu_info = vk::BufferCreateInfo {
-            size: std::mem::size_of::<DepthPyramidUniforms>() as u64,
+            size: std::mem::size_of::<CullingUniforms>() as u64,
             usage: vk::BufferUsageFlags::TRANSFER_DST | vk::BufferUsageFlags::UNIFORM_BUFFER,
             sharing_mode: vk::SharingMode::EXCLUSIVE,
             ..Default::default()
@@ -85,14 +103,14 @@ impl Culling {
             },
             vk::DescriptorSetLayoutBinding {
                 binding: 2,
-                descriptor_type: vk::DescriptorType::STORAGE_IMAGE,
+                descriptor_type: vk::DescriptorType::STORAGE_BUFFER,
                 descriptor_count: 1,
                 stage_flags: vk::ShaderStageFlags::COMPUTE,
                 ..Default::default()
             },
             vk::DescriptorSetLayoutBinding {
                 binding: 3,
-                descriptor_type: vk::DescriptorType::STORAGE_IMAGE,
+                descriptor_type: vk::DescriptorType::STORAGE_BUFFER,
                 descriptor_count: 1,
                 stage_flags: vk::ShaderStageFlags::COMPUTE,
                 ..Default::default()
@@ -117,13 +135,7 @@ impl Culling {
         let uniform_buffer_descriptor = vk::DescriptorBufferInfo {
             buffer: uniform_buffer_gpu.buffer,
             offset: 0,
-            range: mem::size_of::<DepthPyramidUniforms>() as u64,
-        };
-
-        let depth_pyramid_descriptor = vk::DescriptorImageInfo {
-            image_layout: vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL,
-            image_view: *depth_view,
-            sampler,
+            range: mem::size_of::<CullingUniforms>() as u64,
         };
 
         let write_desc_sets = [
@@ -140,44 +152,36 @@ impl Culling {
                 dst_binding: 1,
                 descriptor_count: 1,
                 descriptor_type: vk::DescriptorType::COMBINED_IMAGE_SAMPLER,
-                p_image_info: &depth_image_descriptor,
+                p_image_info: depth_pyramid_descriptor,
                 ..Default::default()
             },
             vk::WriteDescriptorSet {
                 dst_set: descriptor_sets[0],
                 dst_binding: 2,
                 descriptor_count: 1,
-                descriptor_type: vk::DescriptorType::STORAGE_IMAGE,
-                p_image_info: &descriptor,
+                descriptor_type: vk::DescriptorType::STORAGE_BUFFER,
+                p_buffer_info: instances_buffer_descriptor,
                 ..Default::default()
             },
             vk::WriteDescriptorSet {
                 dst_set: descriptor_sets[0],
                 dst_binding: 3,
                 descriptor_count: 1,
-                descriptor_type: vk::DescriptorType::STORAGE_IMAGE,
-                p_image_info: &descriptor,
+                descriptor_type: vk::DescriptorType::STORAGE_BUFFER,
+                p_buffer_info: &visibility_buffer_descriptor,
                 ..Default::default()
             },
         ];
         unsafe { device.update_descriptor_sets(&write_desc_sets, &[]) };
 
-        let push_constants = [vk::PushConstantRange {
-            stage_flags: vk::ShaderStageFlags::COMPUTE,
-            offset: 0,
-            size: std::mem::size_of::<DepthPyramidUniforms>() as u32,
-        }];
-
-        let layout_create_info = vk::PipelineLayoutCreateInfo::builder()
-            .set_layouts(desc_set_layouts)
-            .push_constant_ranges(&push_constants);
+        let layout_create_info =
+            vk::PipelineLayoutCreateInfo::builder().set_layouts(desc_set_layouts);
 
         let pipeline_layout =
             unsafe { device.create_pipeline_layout(&layout_create_info, None) }.unwrap();
 
         let compute_shader_module = {
-            let mut comp_spv_file =
-                Cursor::new(&include_bytes!("../shader/depth_pyramid_first_mip.spv"));
+            let mut comp_spv_file = Cursor::new(&include_bytes!("../shader/culling.spv"));
             let comp_code =
                 read_spv(&mut comp_spv_file).expect("Failed to read compute shader spv file");
             let comp_shader_info = vk::ShaderModuleCreateInfo::builder().code(&comp_code);
@@ -190,7 +194,7 @@ impl Culling {
 
         let compute_pipeline_info = {
             let shader_stage_create_info = vk::PipelineShaderStageCreateInfo {
-                module: compute_shader_module_pass_1,
+                module: compute_shader_module,
                 p_name: shader_entry_name.as_ptr(),
                 stage: vk::ShaderStageFlags::COMPUTE,
                 ..Default::default()
@@ -205,9 +209,7 @@ impl Culling {
         let compute_pipelines = unsafe {
             device.create_compute_pipelines(
                 vk::PipelineCache::null(),
-                &[
-                    compute_pipeline_info,
-                ],
+                &[compute_pipeline_info],
                 None,
             )
         }
@@ -219,21 +221,15 @@ impl Culling {
             pipeline_layout,
             uniform_buffer,
             uniform_buffer_gpu,
+            visibility_buffer,
             desc_set_layout,
             descriptor_sets,
-            image,
-            sampler,
-            view,
-            descriptor,
             compute_pipeline,
-            compute_shader_module_pass_1,
-            compute_shader_module_downsample,
+            compute_shader_module,
         }
     }
 
-    pub fn gpu_setup(&self, device: &Device, command_buffer: &vk::CommandBuffer) {
-
-    }
+    //pub fn gpu_setup(&self, device: &Device, command_buffer: &vk::CommandBuffer) {}
 
     pub fn update(&self, uniforms: &CullingUniforms) {
         self.uniform_buffer.copy_from_slice(&[*uniforms], 0);
@@ -243,9 +239,8 @@ impl Culling {
         &self,
         device: &Device,
         command_buffer: &vk::CommandBuffer,
-        depth_image: &vk::Image,
-        pyramid_mip0_dimension: u32,
-        num_mips: u32,
+        pyramid_image: &vk::Image,
+        num_instances: u32,
     ) {
         let buffer_copy_regions = vk::BufferCopy {
             src_offset: 0,
@@ -270,12 +265,27 @@ impl Culling {
             ..Default::default()
         };
 
-        let barrier_pyramid_pass = vk::ImageMemoryBarrier {
+        let barrier_pyramid_read = vk::ImageMemoryBarrier {
             src_access_mask: vk::AccessFlags::SHADER_READ | vk::AccessFlags::SHADER_WRITE,
+            dst_access_mask: vk::AccessFlags::SHADER_READ,
+            old_layout: vk::ImageLayout::GENERAL,
+            new_layout: vk::ImageLayout::GENERAL,
+            image: *pyramid_image,
+            subresource_range: vk::ImageSubresourceRange {
+                aspect_mask: vk::ImageAspectFlags::COLOR,
+                level_count: 1,
+                layer_count: 1,
+                ..Default::default()
+            },
+            ..Default::default()
+        };
+
+        let barrier_pyramid_rw = vk::ImageMemoryBarrier {
+            src_access_mask: vk::AccessFlags::SHADER_READ,
             dst_access_mask: vk::AccessFlags::SHADER_READ | vk::AccessFlags::SHADER_WRITE,
             old_layout: vk::ImageLayout::GENERAL,
             new_layout: vk::ImageLayout::GENERAL,
-            image: self.image.image,
+            image: *pyramid_image,
             subresource_range: vk::ImageSubresourceRange {
                 aspect_mask: vk::ImageAspectFlags::COLOR,
                 level_count: 1,
@@ -314,11 +324,22 @@ impl Culling {
                 &[],
             );
 
-            // First pass downsample compute shader
+            // Pyramid to GPU read
+            device.cmd_pipeline_barrier(
+                *command_buffer,
+                vk::PipelineStageFlags::COMPUTE_SHADER,
+                vk::PipelineStageFlags::COMPUTE_SHADER,
+                vk::DependencyFlags::empty(),
+                &[],
+                &[],
+                &[barrier_pyramid_read],
+            );
+
+            // Culling compute shader
             device.cmd_bind_pipeline(
                 *command_buffer,
                 vk::PipelineBindPoint::COMPUTE,
-                self.compute_pipeline_pass_1,
+                self.compute_pipeline,
             );
 
             device.cmd_bind_descriptor_sets(
@@ -330,14 +351,11 @@ impl Culling {
                 &[],
             );
 
-            let group_dim = (8, 8);
-            let dim = (
-                pyramid_mip0_dimension / group_dim.0,
-                pyramid_mip0_dimension / group_dim.1,
-            );
-            device.cmd_dispatch(*command_buffer, dim.0, dim.1, 1);
+            let group_dim = 64;
+            let dim = num_instances / group_dim;
+            device.cmd_dispatch(*command_buffer, dim, 1, 1);
 
-            // Barrier between pyramid passes to avoid RaW hazards
+            // Pyramid back to GPU read & write
             device.cmd_pipeline_barrier(
                 *command_buffer,
                 vk::PipelineStageFlags::COMPUTE_SHADER,
@@ -345,13 +363,14 @@ impl Culling {
                 vk::DependencyFlags::empty(),
                 &[],
                 &[],
-                &[barrier_pyramid_pass],
+                &[barrier_pyramid_rw],
             );
         }
     }
 
     pub fn destroy(&self, device: &Device, allocator: &vk_mem::Allocator) {
         unsafe {
+            self.visibility_buffer.destroy(&allocator);
             self.uniform_buffer.destroy(&allocator);
             self.uniform_buffer_gpu.destroy(&allocator);
             device.destroy_pipeline_layout(self.pipeline_layout, None);
