@@ -26,6 +26,8 @@ pub struct Culling {
     pub uniform_buffer: VkBuffer,
     pub uniform_buffer_gpu: VkBuffer,
     pub visibility_buffer: VkBuffer,
+    pub visibility_counter: VkBuffer,
+    pub visibility_buffer_descriptor: vk::DescriptorBufferInfo,
     pub desc_set_layout: vk::DescriptorSetLayout,
     pub descriptor_sets: Vec<vk::DescriptorSet>,
     pub compute_pipeline: vk::Pipeline,
@@ -38,6 +40,7 @@ impl Culling {
         allocator: &vk_mem::Allocator,
         descriptor_pool: &vk::DescriptorPool,
         depth_pyramid_descriptor: &vk::DescriptorImageInfo,
+        depth_pyramid_debug_descriptor: &vk::DescriptorImageInfo,
         instances_buffer_descriptor: &vk::DescriptorBufferInfo,
         num_instances: usize,
     ) -> Culling {
@@ -65,6 +68,22 @@ impl Culling {
             buffer: visibility_buffer.buffer,
             offset: 0,
             range: (std::mem::size_of::<VisibilityData>() * num_instances) as u64,
+        };
+
+        let visibility_counter_info = vk::BufferCreateInfo {
+            size: std::mem::size_of::<u32>() as u64,
+            usage: vk::BufferUsageFlags::STORAGE_BUFFER | vk::BufferUsageFlags::TRANSFER_DST,
+            sharing_mode: vk::SharingMode::EXCLUSIVE,
+            ..Default::default()
+        };
+
+        let visibility_counter =
+            VkBuffer::new(allocator, &visibility_counter_info, &alloc_info_gpu);
+
+        let visibility_counter_descriptor = vk::DescriptorBufferInfo {
+            buffer: visibility_counter.buffer,
+            offset: 0,
+            range: std::mem::size_of::<u32>() as u64,
         };
 
         let uniform_buffer_info = vk::BufferCreateInfo {
@@ -111,6 +130,20 @@ impl Culling {
             vk::DescriptorSetLayoutBinding {
                 binding: 3,
                 descriptor_type: vk::DescriptorType::STORAGE_BUFFER,
+                descriptor_count: 1,
+                stage_flags: vk::ShaderStageFlags::COMPUTE,
+                ..Default::default()
+            },
+            vk::DescriptorSetLayoutBinding {
+                binding: 4,
+                descriptor_type: vk::DescriptorType::STORAGE_BUFFER,
+                descriptor_count: 1,
+                stage_flags: vk::ShaderStageFlags::COMPUTE,
+                ..Default::default()
+            },
+            vk::DescriptorSetLayoutBinding {
+                binding: 5,
+                descriptor_type: vk::DescriptorType::STORAGE_IMAGE,
                 descriptor_count: 1,
                 stage_flags: vk::ShaderStageFlags::COMPUTE,
                 ..Default::default()
@@ -171,6 +204,22 @@ impl Culling {
                 p_buffer_info: &visibility_buffer_descriptor,
                 ..Default::default()
             },
+            vk::WriteDescriptorSet {
+                dst_set: descriptor_sets[0],
+                dst_binding: 4,
+                descriptor_count: 1,
+                descriptor_type: vk::DescriptorType::STORAGE_BUFFER,
+                p_buffer_info: &visibility_counter_descriptor,
+                ..Default::default()
+            },
+            vk::WriteDescriptorSet {
+                dst_set: descriptor_sets[0],
+                dst_binding: 5,
+                descriptor_count: 1,
+                descriptor_type: vk::DescriptorType::STORAGE_IMAGE,
+                p_image_info: depth_pyramid_debug_descriptor,
+                ..Default::default()
+            },
         ];
         unsafe { device.update_descriptor_sets(&write_desc_sets, &[]) };
 
@@ -222,6 +271,8 @@ impl Culling {
             uniform_buffer,
             uniform_buffer_gpu,
             visibility_buffer,
+            visibility_counter,
+            visibility_buffer_descriptor,
             desc_set_layout,
             descriptor_sets,
             compute_pipeline,
@@ -240,6 +291,7 @@ impl Culling {
         device: &Device,
         command_buffer: &vk::CommandBuffer,
         pyramid_image: &vk::Image,
+        pyramid_debug_image: &vk::Image,
         num_instances: u32,
     ) {
         let buffer_copy_regions = vk::BufferCopy {
@@ -295,6 +347,18 @@ impl Culling {
             ..Default::default()
         };
 
+        let clear_color = vk::ClearColorValue {
+            uint32: [0, 0, 0, 0],
+        };
+
+        let image_subresource_range = vk::ImageSubresourceRange {
+            aspect_mask: vk::ImageAspectFlags::COLOR,
+            base_mip_level: 0,
+            level_count: 1,
+            base_array_layer: 0,
+            layer_count: 1,
+        };
+
         unsafe {
             // Update uniform buffer
             device.cmd_pipeline_barrier(
@@ -322,6 +386,22 @@ impl Culling {
                 &[],
                 &[buffer_barrier_end],
                 &[],
+            );
+
+            device.cmd_clear_color_image(
+                *command_buffer,
+                *pyramid_debug_image,
+                vk::ImageLayout::GENERAL,
+                &clear_color,
+                &[image_subresource_range],
+            );
+
+            device.cmd_fill_buffer(
+                *command_buffer,
+                self.visibility_counter.buffer,
+                0,
+                self.visibility_counter.size,
+                0,
             );
 
             // Pyramid to GPU read
@@ -370,6 +450,7 @@ impl Culling {
 
     pub fn destroy(&self, device: &Device, allocator: &vk_mem::Allocator) {
         unsafe {
+            self.visibility_counter.destroy(&allocator);
             self.visibility_buffer.destroy(&allocator);
             self.uniform_buffer.destroy(&allocator);
             self.uniform_buffer_gpu.destroy(&allocator);

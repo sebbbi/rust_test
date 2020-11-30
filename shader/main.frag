@@ -16,12 +16,22 @@ struct InstanceData
 	vec4 position;
 };
 
+struct VisibilityData
+{
+	uint index;
+};
+
 layout(std430, binding = 1) buffer Instances
 {
     InstanceData instances[];
 };
 
-layout (binding = 2) uniform sampler3D samplerColor;
+layout(std430, binding = 2) buffer Visibility
+{
+    VisibilityData visibility[];
+};
+
+layout (binding = 3) uniform sampler3D samplerSDF;
 
 layout (location = 0) in vec3 o_uvw;
 layout (location = 1) in vec4 o_local_camera_pos_lod;
@@ -41,12 +51,12 @@ vec3 normal(vec3 uvw) {
 
     float lod = o_local_camera_pos_lod.w;
     vec3 e = ubo.texel_scale.xyz * 0.5;
-    float xm = textureLod(samplerColor, uvw + vec3(-e.x, 0,    0), lod).x;
-    float xp = textureLod(samplerColor, uvw + vec3( e.x, 0,    0), lod).x;
-    float ym = textureLod(samplerColor, uvw + vec3( 0,   -e.y, 0), lod).x;
-    float yp = textureLod(samplerColor, uvw + vec3( 0,   e.y,  0), lod).x;
-    float zm = textureLod(samplerColor, uvw + vec3( 0,   0, -e.z), lod).x;
-    float zp = textureLod(samplerColor, uvw + vec3( 0,   0,  e.z), lod).x;
+    float xm = textureLod(samplerSDF, uvw + vec3(-e.x, 0,    0), lod).x;
+    float xp = textureLod(samplerSDF, uvw + vec3( e.x, 0,    0), lod).x;
+    float ym = textureLod(samplerSDF, uvw + vec3( 0,   -e.y, 0), lod).x;
+    float yp = textureLod(samplerSDF, uvw + vec3( 0,   e.y,  0), lod).x;
+    float zm = textureLod(samplerSDF, uvw + vec3( 0,   0, -e.z), lod).x;
+    float zp = textureLod(samplerSDF, uvw + vec3( 0,   0,  e.z), lod).x;
     return normalize(vec3(xp - xm, yp - ym, zp - zm));
 }
 
@@ -58,7 +68,7 @@ void main() {
 
     // Do the first step without the outside check
     // Rasterization does not guarantee perfect interpolation
-    float s = textureLod(samplerColor, ray_pos, o_local_camera_pos_lod.w).x;
+    float s = textureLod(samplerSDF, ray_pos, o_local_camera_pos_lod.w).x;
     s = s * 2.0 - 1.0;
 
     float d = s;
@@ -70,7 +80,7 @@ void main() {
                 discard;
                 break;
             }
-            float s = textureLod(samplerColor, uvw, o_local_camera_pos_lod.w).x;
+            float s = textureLod(samplerSDF, uvw, o_local_camera_pos_lod.w).x;
             s = s * 2.0 - 1.0;
             d += s;
             if (s < 0.00025) break;

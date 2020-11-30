@@ -2,6 +2,8 @@
 #extension GL_ARB_separate_shader_objects : enable
 #extension GL_ARB_shading_language_420pack : enable
 
+#define ENABLE_DEBUG
+
 layout (local_size_x = 64) in;
 
 struct InstanceData
@@ -15,8 +17,8 @@ struct VisibilityData
 };
 
 layout (binding = 0) uniform UBO {
-    uint depth_pyramid_dimension;	// pow2 y dimension of mip 0 (texture x is 1.5x wider)
     mat4 world_to_screen;
+    uint depth_pyramid_dimension;	// pow2 y dimension of mip 0 (texture x is 1.5x wider)
 } ubo;
 
 layout (binding = 1) uniform sampler2D depth_pyramid;
@@ -31,7 +33,26 @@ layout(std430, binding = 3) buffer Visibility
     VisibilityData visibility[];
 };
 
-vec4 calculate_mip_rect(uint dimensions, uint mip)
+layout(std430, binding = 4) buffer Counter
+{
+    uint visible_count;
+};
+
+layout (binding = 5, r32ui) uniform uimage2D debug_tex;
+
+uvec4 calculate_mip_rect(uint dimensions, uint mip)
+{
+    uint pixels_mip = dimensions >> mip;
+    uvec4 uv_rect = uvec4(0, 0, pixels_mip, pixels_mip);
+    if (mip > 0)
+    {
+        uv_rect.x = dimensions;
+        uv_rect.y = dimensions - pixels_mip * 2;
+    }
+    return uv_rect;
+}
+
+vec4 calculate_mip_rect_uv(uint dimensions, uint mip)
 {
     float inv_mip_exp2 = exp2(-mip);
     float x_scale = (2.0 / 3.0);
@@ -44,7 +65,97 @@ vec4 calculate_mip_rect(uint dimensions, uint mip)
     return uv_rect;
 }
 
+//Fast Quadric Proj: "GPU-Based Ray-Casting of Quadratic Surfaces" http://dl.acm.org/citation.cfm?id=2386396
+void quadricProj(in vec3 osPosition, in float voxelSize, in mat4 objectToScreenMatrix, in vec2 screenSize,
+    inout vec4 position, inout float pointSize) 
+{
+    const vec4 quadricMat = vec4(1.0, 1.0, 1.0, -1.0);
+    float sphereRadius = voxelSize * 1.732051;
+    vec4 sphereCenter = vec4(osPosition.xyz, 1.0);
+    mat4 modelViewProj = transpose(objectToScreenMatrix);
+
+    mat3x4 matT = mat3x4( mat3(modelViewProj[0].xyz, modelViewProj[1].xyz, modelViewProj[3].xyz) * sphereRadius);
+    matT[0].w = dot(sphereCenter, modelViewProj[0]);
+    matT[1].w = dot(sphereCenter, modelViewProj[1]);
+    matT[2].w = dot(sphereCenter, modelViewProj[3]);
+
+    mat3x4 matD = mat3x4(matT[0] * quadricMat, matT[1] * quadricMat, matT[2] * quadricMat);
+    vec4 eqCoefs =
+        vec4(dot(matD[0], matT[2]), dot(matD[1], matT[2]), dot(matD[0], matT[0]), dot(matD[1], matT[1]))
+        / dot(matD[2], matT[2]);
+
+    vec4 outPosition = vec4(eqCoefs.x, eqCoefs.y, 0.0, 1.0);
+    vec2 AABB = sqrt(eqCoefs.xy*eqCoefs.xy - eqCoefs.zw);
+    AABB *= screenSize;
+
+    position.xy = outPosition.xy * position.w;
+    pointSize = max(AABB.x, AABB.y);
+}
+
+bool outside(vec2 uv) {
+    // saturate instructions are free
+    if (uv.x != clamp(uv.x, 0.0, 1.0)) return true;
+    if (uv.y != clamp(uv.y, 0.0, 1.0)) return true;
+    return false;
+}
+
 void main() {
-    int i = int(gl_GlobalInvocationID.x);
-    visibility[i].index = uint(instances[i].position.x);
+    int instance = int(gl_GlobalInvocationID.x);
+
+    vec4 instance_pos_rad = instances[instance].position;
+    vec3 position = instance_pos_rad.xyz;
+    float radius = instance_pos_rad.w;
+
+    vec4 position_screen = ubo.world_to_screen * vec4(position, 1.0);
+    position_screen.xyz /= position_screen.w;
+    position_screen.xy = position_screen.xy * 0.5 + 0.5;
+
+    // Cheap approximation of mip level (not 100% correct)
+    float radius_screen = radius / position_screen.w;
+    radius_screen *= 256;
+    float mip = log2(radius_screen);
+
+    // Cheap approximation for viewport culling test (not 100% correct)
+    bool visible = false;
+    if ((position_screen.z > 0) && !outside(position_screen.xy))
+    {
+        visible = true;
+
+        // We have only 7 levels in the pyramid. Skip occlusion culling if bounds is too big.
+        if (mip < 7)
+        {
+            // Calculate query rectangle
+            uvec4 mip_rect = calculate_mip_rect(ubo.depth_pyramid_dimension, clamp(int(mip), 0, 6));
+
+            uvec2 coordinate = uvec2(position_screen.xy * vec2(mip_rect.zw) - vec2(0.5, 0.5));
+            coordinate = min(coordinate, mip_rect.zw - uvec2(2, 2));    // Clamp 2x2 region inside rect area
+            coordinate += mip_rect.xy;
+
+            // TODO: Use min filter or gather, bias Z by radius
+            float z00 = texelFetch(depth_pyramid, ivec2(coordinate + uvec2(0, 0)), 0).x;
+            float z10 = texelFetch(depth_pyramid, ivec2(coordinate + uvec2(1, 0)), 0).x;
+            float z01 = texelFetch(depth_pyramid, ivec2(coordinate + uvec2(0, 1)), 0).x;
+            float z11 = texelFetch(depth_pyramid, ivec2(coordinate + uvec2(1, 1)), 0).x;
+            float z = min(min(z00, z10), min(z01, z11));
+            if (position_screen.z < z)
+            {
+                visible = false;
+            }
+
+#ifdef ENABLE_DEBUG
+            // Debug plot to depth pyramid debug texture
+            imageAtomicAdd(debug_tex, ivec2(coordinate + uvec2(0, 0)), 1);
+            imageAtomicAdd(debug_tex, ivec2(coordinate + uvec2(1, 0)), 1);
+            imageAtomicAdd(debug_tex, ivec2(coordinate + uvec2(0, 1)), 1);
+            imageAtomicAdd(debug_tex, ivec2(coordinate + uvec2(1, 1)), 1);
+#endif
+        }
+    }
+
+    if (visible)
+    {
+        // Append visible instance index to the buffer
+        uint offset = atomicAdd(visible_count, 1);
+        visibility[offset].index = instance;
+    }
 }

@@ -16,12 +16,22 @@ struct InstanceData
 	vec4 position;
 };
 
+struct VisibilityData
+{
+	uint index;
+};
+
 layout(std430, binding = 1) buffer Instances
 {
     InstanceData instances[];
 };
 
-layout (binding = 2) uniform sampler3D samplerColor;
+layout(std430, binding = 2) buffer Visibility
+{
+    VisibilityData visibility[];
+};
+
+layout (binding = 3) uniform sampler3D samplerSDF;
 
 layout (location = 0) in vec3 o_uvw;
 layout (location = 1) in vec4 o_local_camera_pos_lod;

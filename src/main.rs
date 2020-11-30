@@ -3,6 +3,7 @@
 const SDF_LEVELS: u32 = 6;
 const NUM_DESCRIPTORS_PER_TYPE: u32 = 1024;
 const NUM_DESCRIPTOR_SETS: u32 = 1024;
+const ENABLE_CULLING_DEBUG: bool = false;
 
 extern crate winit;
 
@@ -12,6 +13,7 @@ mod vulkan_base;
 mod vulkan_helpers;
 
 mod culling;
+mod culling_debug;
 mod depth_pyramid;
 mod instances;
 mod render_cubes;
@@ -35,6 +37,7 @@ use vulkan_base::*;
 use vulkan_helpers::*;
 
 use culling::*;
+use culling_debug::*;
 use depth_pyramid::*;
 use instances::*;
 use render_cubes::*;
@@ -276,21 +279,9 @@ fn main() {
     );
 
     // Cube instances
-    let instances = Instances::new(&base.device, &base.allocator);
+    let instances = Instances::new(&base.device, &base.allocator, diagonal_length);
 
-    // Cube renderer
-    let render_cubes = RenderCubes::new(
-        &base.device,
-        &base.allocator,
-        &descriptor_pool,
-        &render_pass,
-        &view_scissor,
-        &sdf_texture.descriptor,
-        &instances.instances_buffer_descriptor,
-        NUM_INSTANCES,
-    );
-
-    // Depth pyramid for occlusion culling
+    // Occlusion culling (depth pyramid)
     let pyramid_dimension = 512;
     let pyramid_mips = 7;
     let pyramid_texture_dimensions = (pyramid_dimension * 3 / 2, pyramid_dimension);
@@ -302,16 +293,37 @@ fn main() {
         pyramid_texture_dimensions,
     );
 
-    // Occlusion culling
     let culling = Culling::new(
         &base.device,
         &base.allocator,
         &descriptor_pool,
         &depth_pyramid.descriptor_sample,
+        &depth_pyramid.descriptor_debug_sample,
         &instances.instances_buffer_descriptor,
         NUM_INSTANCES,
     );
 
+    let culling_debug = CullingDebug::new(
+        &base.device,
+        &base.allocator,
+        &descriptor_pool,
+        &render_pass,
+        &view_scissor,
+        &depth_pyramid.descriptor_debug_sample,
+    );
+
+    // Cube renderer
+    let render_cubes = RenderCubes::new(
+        &base.device,
+        &base.allocator,
+        &descriptor_pool,
+        &render_pass,
+        &view_scissor,
+        &sdf_texture.descriptor,
+        &instances.instances_buffer_descriptor,
+        &culling.visibility_buffer_descriptor,
+        NUM_INSTANCES,
+    );
     // Submit initialization command buffer before rendering starts
     base.record_submit_commandbuffer(
         0,
@@ -488,9 +500,16 @@ fn main() {
                     depth_pyramid_dimension: pyramid_dimension,
                 };
 
+                let culling_debug_uniforms = CullingDebugUniforms {
+                    depth_pyramid_dimension: pyramid_dimension,
+                };
+
                 render_cubes.update(&cube_uniforms);
                 depth_pyramid.update(&pyramid_uniforms);
                 culling.update(&culling_uniforms);
+                if ENABLE_CULLING_DEBUG {
+                    culling_debug.update(&culling_debug_uniforms);
+                }
 
                 // Setup render passs
                 let clear_values = [
@@ -526,6 +545,7 @@ fn main() {
                     |device, command_buffer| {
                         // Draw/setup (before main render pass)
                         render_cubes.gpu_draw(device, &command_buffer);
+                        culling_debug.gpu_draw(device, &command_buffer);
 
                         // Render pass
                         unsafe {
@@ -539,7 +559,10 @@ fn main() {
                         }
 
                         // Draw (main render pass)
-                        render_cubes.gpu_draw_main_render_pass(device, &command_buffer);
+                        render_cubes.gpu_draw_main_render_pass(device, &command_buffer, None);
+                        if ENABLE_CULLING_DEBUG {
+                            culling_debug.gpu_draw_main_render_pass(device, &command_buffer);
+                        }
 
                         unsafe {
                             device.cmd_end_render_pass(command_buffer);
@@ -557,6 +580,7 @@ fn main() {
                             device,
                             &command_buffer,
                             &depth_pyramid.image.image,
+                            &depth_pyramid.image_debug.image,
                             NUM_INSTANCES as u32,
                         );
                     },
@@ -647,6 +671,7 @@ fn main() {
     unsafe { base.device.device_wait_idle() }.unwrap();
 
     // Cleanup
+    culling_debug.destroy(&base.device, &base.allocator);
     culling.destroy(&base.device, &base.allocator);
     instances.destroy(&base.device, &base.allocator);
     render_cubes.destroy(&base.device, &base.allocator);

@@ -1,6 +1,8 @@
 pub const NUM_INSTANCES: usize = 1024 * 1024;
+pub const CLOUD_RADIUS: f32 = 8000.0;
 
 use rand::Rng;
+use rand::SeedableRng;
 use std::default::Default;
 
 use ash::{vk, Device};
@@ -19,7 +21,7 @@ pub struct Instances {
 }
 
 impl Instances {
-    pub fn new(_device: &Device, allocator: &vk_mem::Allocator) -> Instances {
+    pub fn new(_device: &Device, allocator: &vk_mem::Allocator, instance_radius: f32) -> Instances {
         let alloc_info_cpu_to_gpu = vk_mem::AllocationCreateInfo {
             usage: vk_mem::MemoryUsage::CpuToGpu,
             flags: vk_mem::AllocationCreateFlags::MAPPED,
@@ -43,14 +45,18 @@ impl Instances {
         };
 
         // Random cloud of SDF box instances
-        let mut rng = rand::thread_rng();
+        //let mut rng = rand::thread_rng();
+        let mut rng = rand::rngs::StdRng::from_seed([
+            0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10,
+            11, 12, 13, 14, 15,
+        ]);
         let instances_buffer_data: Vec<InstanceData> = (0..NUM_INSTANCES)
             .map(|_i| InstanceData {
                 position: Vec4 {
-                    x: rng.gen_range(-8000.0, 8000.0),
-                    y: rng.gen_range(-8000.0, 8000.0),
-                    z: rng.gen_range(-8000.0, 8000.0),
-                    w: 1.0,
+                    x: rng.gen_range(-CLOUD_RADIUS, CLOUD_RADIUS),
+                    y: rng.gen_range(-CLOUD_RADIUS, CLOUD_RADIUS),
+                    z: rng.gen_range(-CLOUD_RADIUS, CLOUD_RADIUS),
+                    w: instance_radius,
                 },
             })
             .collect();

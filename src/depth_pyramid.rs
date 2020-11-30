@@ -25,10 +25,16 @@ pub struct DepthPyramid {
     pub uniform_buffer: VkBuffer,
     pub uniform_buffer_gpu: VkBuffer,
     pub image: VkImage,
-    pub sampler: vk::Sampler,
+    pub image_debug: VkImage,
+    pub image_counters: VkImage,
     pub view: vk::ImageView,
+    pub view_debug: vk::ImageView,
+    pub view_counters: vk::ImageView,
+    pub sampler: vk::Sampler,
     pub descriptor_rw: vk::DescriptorImageInfo,
     pub descriptor_sample: vk::DescriptorImageInfo,
+    pub descriptor_debug_rw: vk::DescriptorImageInfo,
+    pub descriptor_debug_sample: vk::DescriptorImageInfo,
     pub desc_set_layout: vk::DescriptorSetLayout,
     pub descriptor_sets: Vec<vk::DescriptorSet>,
     pub compute_pipeline_pass_1: vk::Pipeline,
@@ -75,7 +81,7 @@ impl DepthPyramid {
         let uniform_buffer_gpu =
             VkBuffer::new(allocator, &uniform_buffer_gpu_info, &alloc_info_gpu);
 
-        let texture_create_info = vk::ImageCreateInfo {
+        let image_create_info = vk::ImageCreateInfo {
             image_type: vk::ImageType::TYPE_2D,
             format: vk::Format::R32_SFLOAT,
             extent: vk::Extent3D {
@@ -92,7 +98,49 @@ impl DepthPyramid {
             ..Default::default()
         };
 
-        let image = VkImage::new(&allocator, &texture_create_info, &alloc_info_gpu);
+        let image = VkImage::new(&allocator, &image_create_info, &alloc_info_gpu);
+
+        let image_debug_create_info = vk::ImageCreateInfo {
+            image_type: vk::ImageType::TYPE_2D,
+            format: vk::Format::R32_UINT,
+            extent: vk::Extent3D {
+                width: image_dimensions.0,
+                height: image_dimensions.1,
+                depth: 1,
+            },
+            mip_levels: 1,
+            array_layers: 1,
+            samples: vk::SampleCountFlags::TYPE_1,
+            tiling: vk::ImageTiling::OPTIMAL,
+            usage: vk::ImageUsageFlags::STORAGE
+                | vk::ImageUsageFlags::SAMPLED
+                | vk::ImageUsageFlags::TRANSFER_DST,
+            sharing_mode: vk::SharingMode::EXCLUSIVE,
+            ..Default::default()
+        };
+
+        let image_debug = VkImage::new(&allocator, &image_debug_create_info, &alloc_info_gpu);
+
+        let group_dim = (8, 8);
+
+        let image_counters_create_info = vk::ImageCreateInfo {
+            image_type: vk::ImageType::TYPE_2D,
+            format: vk::Format::R32_UINT,
+            extent: vk::Extent3D {
+                width: image_dimensions.0 / group_dim.0,
+                height: image_dimensions.1 / group_dim.1,
+                depth: 1,
+            },
+            mip_levels: 1,
+            array_layers: 1,
+            samples: vk::SampleCountFlags::TYPE_1,
+            tiling: vk::ImageTiling::OPTIMAL,
+            usage: vk::ImageUsageFlags::STORAGE | vk::ImageUsageFlags::TRANSFER_DST,
+            sharing_mode: vk::SharingMode::EXCLUSIVE,
+            ..Default::default()
+        };
+
+        let image_counters = VkImage::new(&allocator, &image_counters_create_info, &alloc_info_gpu);
 
         let sampler_info = vk::SamplerCreateInfo {
             mag_filter: vk::Filter::LINEAR,
@@ -111,7 +159,7 @@ impl DepthPyramid {
 
         let view_info = vk::ImageViewCreateInfo {
             view_type: vk::ImageViewType::TYPE_2D,
-            format: texture_create_info.format,
+            format: image_create_info.format,
             components: vk::ComponentMapping {
                 r: vk::ComponentSwizzle::R,
                 g: vk::ComponentSwizzle::G,
@@ -129,16 +177,74 @@ impl DepthPyramid {
         };
         let view = unsafe { device.create_image_view(&view_info, None) }.unwrap();
 
+        let view_debug_info = vk::ImageViewCreateInfo {
+            view_type: vk::ImageViewType::TYPE_2D,
+            format: image_debug_create_info.format,
+            components: vk::ComponentMapping {
+                r: vk::ComponentSwizzle::R,
+                g: vk::ComponentSwizzle::G,
+                b: vk::ComponentSwizzle::B,
+                a: vk::ComponentSwizzle::A,
+            },
+            subresource_range: vk::ImageSubresourceRange {
+                aspect_mask: vk::ImageAspectFlags::COLOR,
+                level_count: 1,
+                layer_count: 1,
+                ..Default::default()
+            },
+            image: image_debug.image,
+            ..Default::default()
+        };
+        let view_debug = unsafe { device.create_image_view(&view_debug_info, None) }.unwrap();
+
+        let view_counters_info = vk::ImageViewCreateInfo {
+            view_type: vk::ImageViewType::TYPE_2D,
+            format: image_counters_create_info.format,
+            components: vk::ComponentMapping {
+                r: vk::ComponentSwizzle::R,
+                g: vk::ComponentSwizzle::G,
+                b: vk::ComponentSwizzle::B,
+                a: vk::ComponentSwizzle::A,
+            },
+            subresource_range: vk::ImageSubresourceRange {
+                aspect_mask: vk::ImageAspectFlags::COLOR,
+                level_count: 1,
+                layer_count: 1,
+                ..Default::default()
+            },
+            image: image_counters.image,
+            ..Default::default()
+        };
+        let view_counters = unsafe { device.create_image_view(&view_counters_info, None) }.unwrap();
+
         let descriptor_rw = vk::DescriptorImageInfo {
             image_layout: vk::ImageLayout::GENERAL,
             image_view: view,
-            ..Default::default() //sampler,
+            ..Default::default()
         };
 
         let descriptor_sample = vk::DescriptorImageInfo {
             image_layout: vk::ImageLayout::GENERAL,
             image_view: view,
             sampler,
+        };
+
+        let descriptor_debug_rw = vk::DescriptorImageInfo {
+            image_layout: vk::ImageLayout::GENERAL,
+            image_view: view_debug,
+            ..Default::default()
+        };
+
+        let descriptor_debug_sample = vk::DescriptorImageInfo {
+            image_layout: vk::ImageLayout::GENERAL,
+            image_view: view_debug,
+            sampler,
+        };
+
+        let descriptor_counters = vk::DescriptorImageInfo {
+            image_layout: vk::ImageLayout::GENERAL,
+            image_view: view_counters,
+            ..Default::default()
         };
 
         let desc_layout_bindings = [
@@ -229,7 +335,7 @@ impl DepthPyramid {
                 dst_binding: 3,
                 descriptor_count: 1,
                 descriptor_type: vk::DescriptorType::STORAGE_IMAGE,
-                p_image_info: &descriptor_rw,
+                p_image_info: &descriptor_counters,
                 ..Default::default()
             },
         ];
@@ -322,10 +428,16 @@ impl DepthPyramid {
             desc_set_layout,
             descriptor_sets,
             image,
-            sampler,
+            image_debug,
+            image_counters,
             view,
+            view_debug,
+            view_counters,
+            sampler,
             descriptor_rw,
             descriptor_sample,
+            descriptor_debug_rw,
+            descriptor_debug_sample,
             compute_pipeline_pass_1,
             compute_pipeline_downsample,
             compute_shader_module_pass_1,
@@ -334,11 +446,24 @@ impl DepthPyramid {
     }
 
     pub fn gpu_setup(&self, device: &Device, command_buffer: &vk::CommandBuffer) {
-        // Transition texture to read & write layout
+        // Transition textures to read & write layout
         let texture_barrier = vk::ImageMemoryBarrier {
             dst_access_mask: vk::AccessFlags::SHADER_READ | vk::AccessFlags::SHADER_WRITE,
             new_layout: vk::ImageLayout::GENERAL,
             image: self.image.image,
+            subresource_range: vk::ImageSubresourceRange {
+                aspect_mask: vk::ImageAspectFlags::COLOR,
+                level_count: 1,
+                layer_count: 1,
+                ..Default::default()
+            },
+            ..Default::default()
+        };
+
+        let texture_debug_barrier = vk::ImageMemoryBarrier {
+            dst_access_mask: vk::AccessFlags::SHADER_READ | vk::AccessFlags::SHADER_WRITE,
+            new_layout: vk::ImageLayout::GENERAL,
+            image: self.image_debug.image,
             subresource_range: vk::ImageSubresourceRange {
                 aspect_mask: vk::ImageAspectFlags::COLOR,
                 level_count: 1,
@@ -356,7 +481,7 @@ impl DepthPyramid {
                 vk::DependencyFlags::empty(),
                 &[],
                 &[],
-                &[texture_barrier],
+                &[texture_barrier, texture_debug_barrier],
             );
         };
     }
@@ -579,7 +704,11 @@ impl DepthPyramid {
     pub fn destroy(&self, device: &Device, allocator: &vk_mem::Allocator) {
         unsafe {
             device.destroy_image_view(self.view, None);
+            device.destroy_image_view(self.view_debug, None);
+            device.destroy_image_view(self.view_counters, None);
             self.image.destroy(allocator);
+            self.image_debug.destroy(allocator);
+            self.image_counters.destroy(allocator);
             self.uniform_buffer.destroy(&allocator);
             self.uniform_buffer_gpu.destroy(&allocator);
             device.destroy_sampler(self.sampler, None);
