@@ -1,6 +1,4 @@
-const SIMPLE_FRAGMENT_SHADER: bool = false;
-const CUBE_BACKFACE_OPTIMIZATION: bool = true;
-const NUM_INSTANCES: usize = 1024 * 1024;
+const SINGLE_PASS_MIPGEN: bool = true;
 
 use std::default::Default;
 use std::ffi::CString;
@@ -247,7 +245,7 @@ impl DepthPyramid {
 
         let compute_shader_module_pass_1 = {
             let mut comp_spv_file =
-                Cursor::new(&include_bytes!("../shader/depth_pyramid_first_mip.spv"));
+                Cursor::new(&include_bytes!("../shader/depth_pyramid_first_mip.spv")[..]);
             let comp_code =
                 read_spv(&mut comp_spv_file).expect("Failed to read compute shader spv file");
             let comp_shader_info = vk::ShaderModuleCreateInfo::builder().code(&comp_code);
@@ -273,8 +271,14 @@ impl DepthPyramid {
         };
 
         let compute_shader_module_downsample = {
-            let mut comp_spv_file =
-                Cursor::new(&include_bytes!("../shader/depth_pyramid_downsample.spv"));
+            let mut comp_spv_file = Cursor::new(if SINGLE_PASS_MIPGEN {
+                &include_bytes!(
+                    "../shader/depth_pyramid_downsample_all.spv"
+                )[..]
+            } else {
+                &include_bytes!("../shader/depth_pyramid_downsample.spv")[..]
+            });
+
             let comp_code =
                 read_spv(&mut comp_spv_file).expect("Failed to read compute shader spv file");
             let comp_shader_info = vk::ShaderModuleCreateInfo::builder().code(&comp_code);
@@ -540,9 +544,8 @@ impl DepthPyramid {
                 &[],
             );
 
-            for mip in 1..num_mips {
-                let mip2 = 1 << mip;
-                let push_constants = DepthPyramidPushConstants { mip: mip - 1 };
+            if SINGLE_PASS_MIPGEN {
+                let push_constants = DepthPyramidPushConstants { mip: num_mips - 1 };
 
                 device.cmd_push_constants(
                     *command_buffer,
@@ -553,8 +556,8 @@ impl DepthPyramid {
                 );
 
                 let dim = (
-                    pyramid_mip0_dimension / (group_dim.0 * mip2),
-                    pyramid_mip0_dimension / (group_dim.1 * mip2),
+                    pyramid_mip0_dimension / group_dim.0,
+                    pyramid_mip0_dimension / group_dim.1,
                 );
                 device.cmd_dispatch(*command_buffer, dim.0, dim.1, 1);
 
@@ -568,6 +571,36 @@ impl DepthPyramid {
                     &[],
                     &[barrier_pyramid_pass],
                 );
+            } else {
+                for mip in 1..num_mips {
+                    let mip2 = 1 << mip;
+                    let push_constants = DepthPyramidPushConstants { mip: mip - 1 };
+
+                    device.cmd_push_constants(
+                        *command_buffer,
+                        self.pipeline_layout,
+                        vk::ShaderStageFlags::COMPUTE,
+                        0,
+                        raw_bytes(&[push_constants]),
+                    );
+
+                    let dim = (
+                        pyramid_mip0_dimension / (group_dim.0 * mip2),
+                        pyramid_mip0_dimension / (group_dim.1 * mip2),
+                    );
+                    device.cmd_dispatch(*command_buffer, dim.0, dim.1, 1);
+
+                    // Barrier between pyramid passes to avoid RaW hazards
+                    device.cmd_pipeline_barrier(
+                        *command_buffer,
+                        vk::PipelineStageFlags::COMPUTE_SHADER,
+                        vk::PipelineStageFlags::COMPUTE_SHADER,
+                        vk::DependencyFlags::empty(),
+                        &[],
+                        &[],
+                        &[barrier_pyramid_pass],
+                    );
+                }
             }
         }
     }
