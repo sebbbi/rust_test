@@ -16,6 +16,15 @@ pub struct VisibilityData {
 }
 
 #[derive(Clone, Copy)]
+pub struct DrawIndexedIndirectArguments {
+    pub index_count: u32,
+    pub instance_count: u32,
+    pub first_index: u32,
+    pub vertex_offset: i32,
+    pub first_instance: u32,
+}
+
+#[derive(Clone, Copy)]
 pub struct CullingUniforms {
     pub world_to_screen: Mat4x4,
     pub depth_pyramid_dimension: u32, // pow2 y dimension of mip 0 (texture x is 1.5x wider)
@@ -26,7 +35,7 @@ pub struct Culling {
     pub uniform_buffer: VkBuffer,
     pub uniform_buffer_gpu: VkBuffer,
     pub visibility_buffer: VkBuffer,
-    pub visibility_counter: VkBuffer,
+    pub visibility_arguments: VkBuffer,
     pub visibility_buffer_descriptor: vk::DescriptorBufferInfo,
     pub desc_set_layout: vk::DescriptorSetLayout,
     pub descriptor_sets: Vec<vk::DescriptorSet>,
@@ -70,20 +79,22 @@ impl Culling {
             range: (std::mem::size_of::<VisibilityData>() * num_instances) as u64,
         };
 
-        let visibility_counter_info = vk::BufferCreateInfo {
-            size: std::mem::size_of::<u32>() as u64,
-            usage: vk::BufferUsageFlags::STORAGE_BUFFER | vk::BufferUsageFlags::TRANSFER_DST,
+        let visibility_arguments_info = vk::BufferCreateInfo {
+            size: std::mem::size_of::<DrawIndexedIndirectArguments>() as u64,
+            usage: vk::BufferUsageFlags::STORAGE_BUFFER
+                | vk::BufferUsageFlags::TRANSFER_DST
+                | vk::BufferUsageFlags::INDIRECT_BUFFER,
             sharing_mode: vk::SharingMode::EXCLUSIVE,
             ..Default::default()
         };
 
-        let visibility_counter =
-            VkBuffer::new(allocator, &visibility_counter_info, &alloc_info_gpu);
+        let visibility_arguments =
+            VkBuffer::new(allocator, &visibility_arguments_info, &alloc_info_gpu);
 
-        let visibility_counter_descriptor = vk::DescriptorBufferInfo {
-            buffer: visibility_counter.buffer,
+        let visibility_arguments_descriptor = vk::DescriptorBufferInfo {
+            buffer: visibility_arguments.buffer,
             offset: 0,
-            range: std::mem::size_of::<u32>() as u64,
+            range: std::mem::size_of::<DrawIndexedIndirectArguments>() as u64,
         };
 
         let uniform_buffer_info = vk::BufferCreateInfo {
@@ -209,7 +220,7 @@ impl Culling {
                 dst_binding: 4,
                 descriptor_count: 1,
                 descriptor_type: vk::DescriptorType::STORAGE_BUFFER,
-                p_buffer_info: &visibility_counter_descriptor,
+                p_buffer_info: &visibility_arguments_descriptor,
                 ..Default::default()
             },
             vk::WriteDescriptorSet {
@@ -271,7 +282,7 @@ impl Culling {
             uniform_buffer,
             uniform_buffer_gpu,
             visibility_buffer,
-            visibility_counter,
+            visibility_arguments,
             visibility_buffer_descriptor,
             desc_set_layout,
             descriptor_sets,
@@ -280,7 +291,21 @@ impl Culling {
         }
     }
 
-    //pub fn gpu_setup(&self, device: &Device, command_buffer: &vk::CommandBuffer) {}
+    pub fn gpu_setup(&self, device: &Device, command_buffer: &vk::CommandBuffer) {
+        unsafe {
+            // Lazy way to init the argument buffer :)
+            let arguments = [0, 1, 0, 0, 0];
+            for (a, i) in arguments.iter().enumerate() {
+                device.cmd_fill_buffer(
+                    *command_buffer,
+                    self.visibility_arguments.buffer,
+                    (i * std::mem::size_of::<u32>()) as u64,
+                    std::mem::size_of::<u32>() as u64,
+                    a as u32,
+                );
+            }
+        }
+    }
 
     pub fn update(&self, uniforms: &CullingUniforms) {
         self.uniform_buffer.copy_from_slice(&[*uniforms], 0);
@@ -396,11 +421,12 @@ impl Culling {
                 &[image_subresource_range],
             );
 
+            // Clear the visible index count (remaining of the buffer stays)
             device.cmd_fill_buffer(
                 *command_buffer,
-                self.visibility_counter.buffer,
+                self.visibility_arguments.buffer,
                 0,
-                self.visibility_counter.size,
+                std::mem::size_of::<u32>() as u64,
                 0,
             );
 
@@ -450,7 +476,7 @@ impl Culling {
 
     pub fn destroy(&self, device: &Device, allocator: &vk_mem::Allocator) {
         unsafe {
-            self.visibility_counter.destroy(&allocator);
+            self.visibility_arguments.destroy(&allocator);
             self.visibility_buffer.destroy(&allocator);
             self.uniform_buffer.destroy(&allocator);
             self.uniform_buffer_gpu.destroy(&allocator);

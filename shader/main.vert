@@ -40,6 +40,11 @@ layout (location = 2) out vec3 o_local_pos;
 void main() {
     uint vx = gl_VertexIndex;
     uint instance = vx >> 3;
+
+#ifdef USE_VISIBILITY_DATA
+    instance = visibility[instance].index;
+#endif
+
     uvec3 xyz = uvec3(vx & 0x1, (vx & 0x4) >> 2, (vx & 0x2) >> 1);
     vec3 uvw = vec3(xyz);
     vec3 pos = uvw * 2.0 - 1.0;

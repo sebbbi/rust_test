@@ -2,6 +2,8 @@
 #extension GL_ARB_separate_shader_objects : enable
 #extension GL_ARB_shading_language_420pack : enable
 
+#define USE_VISIBILITY_DATA
+
 layout (binding = 0) uniform UBO {
     mat4 world_to_screen;
     vec4 color;
@@ -40,6 +42,10 @@ layout (location = 2) out vec3 o_local_pos;
 void main() {
     uint vx = gl_VertexIndex;
     uint instance = vx >> 3;
+
+#ifdef USE_VISIBILITY_DATA
+    instance = visibility[instance].index;
+#endif
 
     vec3 instance_pos = instances[instance].position.xyz;
     vec3 local_camera_pos = ubo.camera_position.xyz - instance_pos;

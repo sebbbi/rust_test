@@ -336,6 +336,7 @@ fn main() {
             render_cubes.gpu_setup(device, &command_buffer);
             sdf_texture.gpu_setup(device, &command_buffer, &sdf_levels);
             depth_pyramid.gpu_setup(device, &command_buffer);
+            culling.gpu_setup(device, &command_buffer);
         },
     );
 
@@ -559,7 +560,12 @@ fn main() {
                         }
 
                         // Draw (main render pass)
-                        render_cubes.gpu_draw_main_render_pass(device, &command_buffer, None);
+                        //render_cubes.gpu_draw_main_render_pass(device, &command_buffer, None);
+                        render_cubes.gpu_draw_main_render_pass(
+                            device,
+                            &command_buffer,
+                            Some(&culling.visibility_arguments.buffer),
+                        );
                         if ENABLE_CULLING_DEBUG {
                             culling_debug.gpu_draw_main_render_pass(device, &command_buffer);
                         }
