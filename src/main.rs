@@ -136,13 +136,13 @@ fn main() {
     */
 
     // Window
-    let window_width = 1280;
-    let window_height = 720;
+    let window_width = 1920;
+    let window_height = 1080;
 
     let mut events_loop = EventLoop::new();
     let window = WindowBuilder::new()
         .with_title("Vulkan Test")
-        .with_inner_size(winit::dpi::LogicalSize::new(
+        .with_inner_size(winit::dpi::PhysicalSize::new(
             f64::from(window_width),
             f64::from(window_height),
         ))

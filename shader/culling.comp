@@ -2,7 +2,7 @@
 #extension GL_ARB_separate_shader_objects : enable
 #extension GL_ARB_shading_language_420pack : enable
 
-#define ENABLE_DEBUG
+//#define ENABLE_DEBUG
 #define INDICES_PER_INSTANCE        (3*3*2)
 
 layout (local_size_x = 64) in;
@@ -107,6 +107,10 @@ bool sampleVisibility(uvec2 coordinate, uvec4 mip_rect, float z)
     if (coordinate.y - mip_rect.y < mip_rect.w)
     {
         float s = texelFetch(depth_pyramid, ivec2(coordinate), 0).x;
+#ifdef ENABLE_DEBUG
+        // Debug plot to depth pyramid debug texture
+        imageAtomicAdd(debug_tex, ivec2(coordinate), 1);
+#endif
         return s < z;
     }
     return false;
@@ -149,14 +153,6 @@ void main() {
             visible = visible || sampleVisibility(coordinate + uvec2(1, 0), mip_rect, front_z);
             visible = visible || sampleVisibility(coordinate + uvec2(0, 1), mip_rect, front_z);
             visible = visible || sampleVisibility(coordinate + uvec2(1, 1), mip_rect, front_z);
-
-#ifdef ENABLE_DEBUG
-            // Debug plot to depth pyramid debug texture
-            imageAtomicAdd(debug_tex, ivec2(coordinate + uvec2(0, 0)), 1);
-            imageAtomicAdd(debug_tex, ivec2(coordinate + uvec2(1, 0)), 1);
-            imageAtomicAdd(debug_tex, ivec2(coordinate + uvec2(0, 1)), 1);
-            imageAtomicAdd(debug_tex, ivec2(coordinate + uvec2(1, 1)), 1);
-#endif
         }
     }
 
