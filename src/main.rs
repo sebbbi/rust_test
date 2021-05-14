@@ -7,14 +7,14 @@ const ENABLE_CULLING_DEBUG: bool = false;
 
 extern crate winit;
 
-mod vulkan_base;
-mod vulkan_helpers;
 mod culling;
 mod culling_debug;
 mod depth_pyramid;
 mod instances;
 mod render_cubes;
 mod sdf_texture;
+mod vulkan_base;
+mod vulkan_helpers;
 
 use rust_test::minivector;
 use rust_test::sdf;

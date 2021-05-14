@@ -34,7 +34,10 @@ fn main() {
 
     // Find all edge tiles
     let tile_size = 8;
-    println!("Finding edge tiles. Tile size = {}x{}x{}", tile_size, tile_size, tile_size);
+    println!(
+        "Finding edge tiles. Tile size = {}x{}x{}",
+        tile_size, tile_size, tile_size
+    );
     for (i, level) in sdf_levels.iter().enumerate() {
         let dim = level.sdf.header.dim;
 
@@ -44,9 +47,9 @@ fn main() {
         let mut total_tile_count = 0;
         let mut edge_tile_count = 0;
 
-        for z in 0..(dim.2/tile_size) {
-            for y in 0..(dim.1/tile_size) {
-                for x in 0..(dim.0/tile_size) {
+        for z in 0..(dim.2 / tile_size) {
+            for y in 0..(dim.1 / tile_size) {
+                for x in 0..(dim.0 / tile_size) {
                     let tile_offset = tile_size * (z * stride_z + y * stride_y + x);
                     let mut has_inside = false;
                     let mut has_outside = false;
@@ -54,9 +57,14 @@ fn main() {
                         for iy in 0..tile_size {
                             for ix in 0..tile_size {
                                 let voxel_offset = iz * stride_z + iy * stride_y + ix;
-                                let d = level.sdf.voxels[tile_offset as usize + voxel_offset as usize];
-                                if d < level_zero { has_inside = true; };
-                                if d > level_zero { has_outside = true; };
+                                let d =
+                                    level.sdf.voxels[tile_offset as usize + voxel_offset as usize];
+                                if d < level_zero {
+                                    has_inside = true;
+                                };
+                                if d > level_zero {
+                                    has_outside = true;
+                                };
                             }
                         }
                     }
@@ -68,7 +76,13 @@ fn main() {
             }
         }
 
-        println!("Level = {}: Total tiles = {}, Edge tiles = {} ({}%)", i, total_tile_count, edge_tile_count, edge_tile_count as f32 * 100.0 / total_tile_count as f32);
+        println!(
+            "Level = {}: Total tiles = {}, Edge tiles = {} ({}%)",
+            i,
+            total_tile_count,
+            edge_tile_count,
+            edge_tile_count as f32 * 100.0 / total_tile_count as f32
+        );
     }
 
     let args: Vec<String> = env::args().collect();

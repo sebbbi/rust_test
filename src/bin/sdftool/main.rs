@@ -2,8 +2,8 @@
 
 use std::process;
 
-use std::env;
 use rust_test::sdf;
+use std::env;
 
 use sdf::*;
 
@@ -14,7 +14,7 @@ pub struct SdfLevel {
 
 pub struct Params {
     pub file_in: String,
-    pub file_out: String
+    pub file_out: String,
 }
 
 fn parse_args(args: &[String]) -> Result<Params, &str> {
@@ -24,7 +24,7 @@ fn parse_args(args: &[String]) -> Result<Params, &str> {
 
     let file_in = args[1].clone();
     let file_out = args[2].clone();
-    Ok(Params {file_in, file_out})
+    Ok(Params { file_in, file_out })
 }
 
 fn print_usage() {
@@ -51,13 +51,11 @@ fn main() {
     println!("Load SDF {}", params.file_in);
     let sdf = load_sdf_zlib(&params.file_in).expect("SDF loading failed");
 
-    println!("Orient SDF x = {:?}, y = {:?}, z = {:?}", axis_x, axis_y, axis_z);
-    let sdf = orient_sdf(
-        &sdf,
-        axis_x,
-        axis_y,
-        axis_z,
+    println!(
+        "Orient SDF x = {:?}, y = {:?}, z = {:?}",
+        axis_x, axis_y, axis_z
     );
+    let sdf = orient_sdf(&sdf, axis_x, axis_y, axis_z);
 
     println!("Store SDF with zlib {}", params.file_out);
     store_sdf_zlib(&params.file_out, &sdf).expect("SDF store failed");
