@@ -14,7 +14,6 @@ Various optimization techniques will be tested on top of this prototype.
 
 # Todo
 * Conservative depth output
-* GPU-driven occlusion culling
 * Command line tool for SDF processing (sdf.rs functionality)
 * Sparse SDF test project
 * More than one SDF volume (easy to implement for sparse SDF)
