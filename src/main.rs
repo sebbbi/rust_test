@@ -7,19 +7,17 @@ const ENABLE_CULLING_DEBUG: bool = false;
 
 extern crate winit;
 
-mod minivector;
-mod serialization;
 mod vulkan_base;
 mod vulkan_helpers;
-
 mod culling;
 mod culling_debug;
 mod depth_pyramid;
 mod instances;
 mod render_cubes;
-mod sdf;
 mod sdf_texture;
-mod sparse_sdf;
+
+use rust_test::minivector;
+use rust_test::sdf;
 
 use std::time::Instant;
 
@@ -33,6 +31,8 @@ use winit::{
 };
 
 use minivector::*;
+use sdf::*;
+
 use vulkan_base::*;
 use vulkan_helpers::*;
 
@@ -41,7 +41,6 @@ use culling_debug::*;
 use depth_pyramid::*;
 use instances::*;
 use render_cubes::*;
-use sdf::*;
 use sdf_texture::*;
 
 #[derive(Clone, Copy)]
@@ -58,17 +57,6 @@ pub struct SdfLevel {
 fn main() {
     // Distance field
     let sdf = load_sdf_zlib("data/ganymede-and-jupiter.sdf").expect("SDF loading failed");
-
-    /*
-    let sdf = orient_sdf(
-        &sdf,
-        AxisFlip::PositiveX,
-        AxisFlip::PositiveZ,
-        AxisFlip::PositiveY,
-    );
-
-    store_sdf_zlib("data/ganymede-and-jupiter2.sdf", &sdf);
-    */
 
     let mut sdf_levels = Vec::new();
     let mut sdf_total_voxels = sdf.header.dim.0 * sdf.header.dim.1 * sdf.header.dim.2;
@@ -99,41 +87,6 @@ fn main() {
         z: dim.2 as f32,
     };
     let texel_scale = Vec3::from_scalar(1.0) / texels;
-
-    /*
-    let tile_size = 8;
-    let stride_y = dim.0;
-    let stride_z = dim.0 * dim.1;
-    let level_zero = (65536 / 2) as u16;
-    let mut total_tile_count = 0;
-    let mut edge_tile_count = 0;
-
-    for z in 0..(dim.2/tile_size) {
-        for y in (0..dim.1/tile_size) {
-            for x in (0..dim.0/tile_size) {
-                let tile_offset = tile_size * (z * stride_z + y * stride_y + x);
-                let mut has_inside = false;
-                let mut has_outside = false;
-                for iz in 0..tile_size {
-                    for iy in 0..tile_size {
-                        for ix in 0..tile_size {
-                            let voxel_offset = iz * stride_z + iy * stride_y + ix;
-                            let d = sdf.voxels[tile_offset as usize + voxel_offset as usize];
-                            if d < level_zero { has_inside = true; };
-                            if d > level_zero { has_outside = true; };
-                        }
-                    }
-                }
-                if has_inside && has_outside {
-                    edge_tile_count += 1;
-                }
-                total_tile_count += 1;
-            }
-        }
-    }
-
-    println!("Tile size = {}x{}x{}, Total tiles = {}, Edge tiles = {} ({}%)", tile_size, tile_size, tile_size, total_tile_count, edge_tile_count, edge_tile_count as f32 * 100.0 / total_tile_count as f32);
-    */
 
     // Window
     let window_width = 1920;

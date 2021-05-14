@@ -76,6 +76,7 @@ pub fn load_sdf(filename: &str) -> io::Result<Sdf> {
 }
 
 pub fn store_sdf_zlib(filename: &str, sdf: &Sdf) -> io::Result<()> {
+    println!("Store SDF: preprocess");
     let sdf = compress_preprocess_sdf(&sdf);
 
     let byte_count =
@@ -94,7 +95,9 @@ pub fn store_sdf_zlib(filename: &str, sdf: &Sdf) -> io::Result<()> {
 
     storer.store_array_u16(&mut bytes[..], &sdf.voxels[..]);
 
-    let bytes = compress_to_vec(&bytes[..], 6);
+    println!("Store SDF: zlib");
+    let bytes = compress_to_vec(&bytes[..], 5);
+    println!("Store SDF: write {} bytes", bytes.len());
     std::fs::write(filename, bytes)?;
 
     Ok(())
@@ -122,6 +125,7 @@ pub fn store_sdf(filename: &str, sdf: &Sdf) -> io::Result<()> {
     Ok(())
 }
 
+#[derive(Debug)]
 pub enum AxisFlip {
     PositiveX,
     NegativeX,
