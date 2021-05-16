@@ -1,0 +1,1 @@
+cargo run --release --bin sdf2tilemap data\ganymede-and-jupiter-compressed.sdf data\ganymede-and-jupiter-compressed.map

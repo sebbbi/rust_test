@@ -50,6 +50,12 @@ impl Loader {
     }
 }
 
+impl Default for Loader {
+    fn default() -> Self {
+        Loader::new()
+    }
+}
+
 pub struct Storer {
     offset: usize,
 }
@@ -86,5 +92,11 @@ impl Storer {
             bytes[self.offset..self.offset + 4].copy_from_slice(&v.to_le_bytes()[..]);
             self.offset += 4;
         }
+    }
+}
+
+impl Default for Storer {
+    fn default() -> Self {
+        Storer::new()
     }
 }

@@ -1,0 +1,1 @@
+tools\SDFGen.exe data\ganymede-and-jupiter.obj 0.125 32 0 224 32
