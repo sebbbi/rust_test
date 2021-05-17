@@ -1,12 +1,14 @@
-const SDF_LEVELS: u32 = 5;
+const SDF_LEVELS: u32 = 6;
 
 use std::env;
 use std::process;
 
 use rust_test::sdf;
+use rust_test::serialization;
 //use rust_test::sparse_sdf;
 
 use sdf::*;
+use serialization::*;
 //use sparse_sdf::*;
 
 pub struct SdfLevel {
@@ -93,18 +95,23 @@ fn main() {
         tile_size_outer
     );
 
+    let mut storer_header = StorerVec::new();
+    let mut storer_voxels = StorerVec::new();
+    let mut total_tile_count = 0;
+
     for (i, level) in sdf_levels.iter().enumerate() {
         let dim = level.sdf.header.dim;
 
         let stride_y = dim.0;
         let stride_z = dim.0 * dim.1;
         let level_zero = (65536 / 2) as u16;
-        let mut total_tile_count = 0;
+        let mut mip_tile_count = 0;
         let mut edge_tile_count = 0;
 
         for z in 0..(dim.2 / tile_size_payload) {
             for y in 0..(dim.1 / tile_size_payload) {
                 for x in 0..(dim.0 / tile_size_payload) {
+                    // Test edge: contains both positive and negative voxels
                     let tile_offset = tile_size_payload * (z * stride_z + y * stride_y + x);
                     let mut has_inside = false;
                     let mut has_outside = false;
@@ -123,20 +130,50 @@ fn main() {
                             }
                         }
                     }
+
+                    // Edge tile?
                     if has_inside && has_outside {
                         edge_tile_count += 1;
+
+                        // Store voxels
+                        for iz in 0..tile_size_outer {
+                            for iy in 0..tile_size_outer {
+                                for ix in 0..tile_size_outer {
+                                    let voxel_offset = iz * stride_z + iy * stride_y + ix;
+                                    let d = level.sdf.voxels
+                                        [tile_offset as usize + voxel_offset as usize];
+                                    storer_voxels.store_u16(d);
+                                }
+                            }
+                        }
                     }
-                    total_tile_count += 1;
+                    mip_tile_count += 1;
                 }
             }
         }
 
         println!(
-            "Level = {}: Total tiles = {}, Edge tiles = {} ({}%)",
+            "Level = {}: Tiles = {}, Edge tiles = {} ({}%)",
             i,
-            total_tile_count,
+            mip_tile_count,
             edge_tile_count,
-            edge_tile_count as f32 * 100.0 / total_tile_count as f32
+            edge_tile_count as f32 * 100.0 / mip_tile_count as f32
         );
+
+        storer_header.store_u32(edge_tile_count);
+        total_tile_count += edge_tile_count;
     }
+
+    let mut storer = StorerVec::new();
+    storer.store_array_u8(&storer_header.v);
+    storer.store_array_u8(&storer_voxels.v);
+
+    println!(
+        "Storing tiles = {}, bytes = {} to {}",
+        total_tile_count,
+        storer.v.len(),
+        params.file_out
+    );
+
+    std::fs::write(params.file_out, storer.v).expect("Tilemap store failed");
 }
