@@ -1,7 +1,7 @@
 use std::convert::TryInto;
 
 pub struct Loader {
-    offset: usize,
+    pub offset: usize,
 }
 
 impl Loader {
@@ -57,12 +57,17 @@ impl Default for Loader {
 }
 
 pub struct Storer {
-    offset: usize,
+    pub offset: usize,
 }
 
 impl Storer {
     pub fn new() -> Storer {
         Storer { offset: 0 }
+    }
+
+    pub fn store_u8(&mut self, bytes: &mut [u8], v: u8) {
+        bytes[self.offset] = v;
+        self.offset += 1;
     }
 
     pub fn store_u16(&mut self, bytes: &mut [u8], v: u16) {
@@ -80,6 +85,11 @@ impl Storer {
         self.offset += 4;
     }
 
+    pub fn store_array_u8(&mut self, bytes: &mut [u8], src: &[u8]) {
+        bytes[self.offset..self.offset + src.len()].copy_from_slice(src);
+        self.offset += src.len();
+    }
+
     pub fn store_array_u16(&mut self, bytes: &mut [u8], src: &[u16]) {
         for v in src {
             bytes[self.offset..self.offset + 2].copy_from_slice(&v.to_le_bytes()[..]);
@@ -87,7 +97,7 @@ impl Storer {
         }
     }
 
-    pub fn load_array_f32(&mut self, bytes: &mut [u8], src: &[f32]) {
+    pub fn store_array_f32(&mut self, bytes: &mut [u8], src: &[f32]) {
         for v in src {
             bytes[self.offset..self.offset + 4].copy_from_slice(&v.to_le_bytes()[..]);
             self.offset += 4;
@@ -98,5 +108,53 @@ impl Storer {
 impl Default for Storer {
     fn default() -> Self {
         Storer::new()
+    }
+}
+
+pub struct StorerVec {
+    pub v: Vec<u8>,
+}
+
+impl StorerVec {
+    pub fn new() -> StorerVec {
+        StorerVec { v: Vec::new() }
+    }
+
+    pub fn store_u8(&mut self, v: u8) {
+        self.v.push(v);
+    }
+
+    pub fn store_u16(&mut self, v: u16) {
+        self.v.extend_from_slice(&v.to_le_bytes()[..]);
+    }
+
+    pub fn store_u32(&mut self, v: u32) {
+        self.v.extend_from_slice(&v.to_le_bytes()[..]);
+    }
+
+    pub fn store_f32(&mut self, v: f32) {
+        self.v.extend_from_slice(&v.to_le_bytes()[..]);
+    }
+
+    pub fn store_array_u8(&mut self, src: &[u8]) {
+        self.v.extend_from_slice(src);
+    }
+
+    pub fn store_array_u16(&mut self, src: &[u16]) {
+        for v in src {
+            self.v.extend_from_slice(&v.to_le_bytes()[..]);
+        }
+    }
+
+    pub fn store_array_f32(&mut self, src: &[f32]) {
+        for v in src {
+            self.v.extend_from_slice(&v.to_le_bytes()[..]);
+        }
+    }
+}
+
+impl Default for StorerVec {
+    fn default() -> Self {
+        StorerVec::new()
     }
 }
