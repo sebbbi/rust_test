@@ -7,7 +7,7 @@ The first test project renders 1 million cubes, each containing a 950 MB (uncomp
 
 The second test project is going to be using sparse octree storing a hierarchy of distance field volume bricks, each rasterized as a cube. This will both reduce the SDF volume memory consumption by 98% and make the runtime faster, as most rays missing the object will not be cast at at all, and the remaining rays will start very close to the surface.
 
-The second test project will use a GPU-driven culling solution slightly similar to the one we presented at SIGGRAPH 2015:
+These projects use a GPU-driven culling solution similar to the one we presented at SIGGRAPH 2015 (Media Molecule Dreams and UE5 Nanite also use similar culling):
 https://advances.realtimerendering.com/s2015/aaltonenhaar_siggraph2015_combined_final_footer_220dpi.pdf
 
 Various optimization techniques will be tested on top of this prototype.
