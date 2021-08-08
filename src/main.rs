@@ -26,7 +26,7 @@ use ash::vk;
 use winit::{
     event::{ElementState, Event, MouseButton, MouseScrollDelta, VirtualKeyCode, WindowEvent},
     event_loop::{ControlFlow, EventLoop},
-    platform::desktop::EventLoopExtDesktop,
+    platform::run_return::EventLoopExtRunReturn,
     window::WindowBuilder,
 };
 
@@ -297,7 +297,7 @@ fn main() {
     struct Camera {
         position: Vec3,
         direction: Vec3,
-    };
+    }
 
     let mut camera = Camera {
         position: Vec3 {
@@ -320,7 +320,7 @@ fn main() {
         wheel_delta: f32,
         keyboard_forward: i32,
         keyboard_side: i32,
-    };
+    }
 
     impl Default for Inputs {
         fn default() -> Inputs {
@@ -332,7 +332,7 @@ fn main() {
                 keyboard_side: 0,
             }
         }
-    };
+    }
 
     // Window event loop
     println!("Start window event loop");
