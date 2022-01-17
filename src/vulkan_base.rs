@@ -5,7 +5,8 @@
 extern crate ash;
 extern crate winit;
 
-use crate::VkImage;
+use crate::vulkan_helpers::*;
+
 use ash::extensions::{
     ext::DebugUtils,
     khr::{Surface, Swapchain},
