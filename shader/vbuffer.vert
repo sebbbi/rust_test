@@ -18,22 +18,10 @@ struct InstanceData
 	vec4 position;
 };
 
-struct VisibilityData
-{
-	uint index;
-};
-
 layout(std430, binding = 1) buffer Instances
 {
     InstanceData instances[];
 };
-
-layout(std430, binding = 2) buffer Visibility
-{
-    VisibilityData visibility[];
-};
-
-layout (binding = 3) uniform sampler3D samplerSDF;
 
 layout (location = 0) out vec3 o_uvw;
 layout (location = 1) out vec4 o_local_camera_pos_lod;
@@ -42,10 +30,6 @@ layout (location = 2) out vec3 o_local_pos;
 void main() {
     uint vx = gl_VertexIndex;
     uint instance = vx >> 3;
-
-#ifdef USE_VISIBILITY_DATA
-    instance = visibility[instance].index;
-#endif
 
     uvec3 xyz = uvec3(vx & 0x1, (vx & 0x4) >> 2, (vx & 0x2) >> 1);
     vec3 uvw = vec3(xyz);
