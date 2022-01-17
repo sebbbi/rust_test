@@ -26,7 +26,7 @@ use ash::vk;
 use winit::{
     event::{ElementState, Event, MouseButton, MouseScrollDelta, VirtualKeyCode, WindowEvent},
     event_loop::{ControlFlow, EventLoop},
-    platform::desktop::EventLoopExtDesktop,
+    platform::run_return::EventLoopExtRunReturn,
     window::WindowBuilder,
 };
 

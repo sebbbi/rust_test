@@ -9,7 +9,7 @@ edition = "2018"
 [dependencies]
 ash = "0.31"
 ash-window = "0.5"
-winit = "0.22"
+winit = "0.24"
 image = "0.23"
 rand = "0.7.3"
 miniz_oxide = "0.4.3"
