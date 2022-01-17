@@ -77,7 +77,7 @@ pub fn load_sdf(filename: &str) -> io::Result<Sdf> {
 
 pub fn store_sdf_zlib(filename: &str, sdf: &Sdf) -> io::Result<()> {
     println!("Store SDF: preprocess");
-    let sdf = compress_preprocess_sdf(&sdf);
+    let sdf = compress_preprocess_sdf(sdf);
 
     let byte_count =
         sdf.voxels.len() as usize * std::mem::size_of::<u16>() + std::mem::size_of::<SdfHeader>();

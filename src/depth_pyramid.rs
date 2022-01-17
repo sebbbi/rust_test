@@ -98,7 +98,7 @@ impl DepthPyramid {
             ..Default::default()
         };
 
-        let image = VkImage::new(&allocator, &image_create_info, &alloc_info_gpu);
+        let image = VkImage::new(allocator, &image_create_info, &alloc_info_gpu);
 
         let image_debug_create_info = vk::ImageCreateInfo {
             image_type: vk::ImageType::TYPE_2D,
@@ -119,7 +119,7 @@ impl DepthPyramid {
             ..Default::default()
         };
 
-        let image_debug = VkImage::new(&allocator, &image_debug_create_info, &alloc_info_gpu);
+        let image_debug = VkImage::new(allocator, &image_debug_create_info, &alloc_info_gpu);
 
         let group_dim = (8, 8);
 
@@ -140,7 +140,7 @@ impl DepthPyramid {
             ..Default::default()
         };
 
-        let image_counters = VkImage::new(&allocator, &image_counters_create_info, &alloc_info_gpu);
+        let image_counters = VkImage::new(allocator, &image_counters_create_info, &alloc_info_gpu);
 
         let sampler_info = vk::SamplerCreateInfo {
             mag_filter: vk::Filter::LINEAR,
@@ -709,8 +709,8 @@ impl DepthPyramid {
             self.image.destroy(allocator);
             self.image_debug.destroy(allocator);
             self.image_counters.destroy(allocator);
-            self.uniform_buffer.destroy(&allocator);
-            self.uniform_buffer_gpu.destroy(&allocator);
+            self.uniform_buffer.destroy(allocator);
+            self.uniform_buffer_gpu.destroy(allocator);
             device.destroy_sampler(self.sampler, None);
             device.destroy_pipeline_layout(self.pipeline_layout, None);
             device.destroy_descriptor_set_layout(self.desc_set_layout, None);

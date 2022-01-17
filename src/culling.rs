@@ -476,10 +476,10 @@ impl Culling {
 
     pub fn destroy(&self, device: &Device, allocator: &vk_mem::Allocator) {
         unsafe {
-            self.visibility_arguments.destroy(&allocator);
-            self.visibility_buffer.destroy(&allocator);
-            self.uniform_buffer.destroy(&allocator);
-            self.uniform_buffer_gpu.destroy(&allocator);
+            self.visibility_arguments.destroy(allocator);
+            self.visibility_buffer.destroy(allocator);
+            self.uniform_buffer.destroy(allocator);
+            self.uniform_buffer_gpu.destroy(allocator);
             device.destroy_pipeline_layout(self.pipeline_layout, None);
             device.destroy_descriptor_set_layout(self.desc_set_layout, None);
             device.destroy_pipeline(self.compute_pipeline, None);

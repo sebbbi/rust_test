@@ -70,6 +70,6 @@ impl Instances {
     }
 
     pub fn destroy(&self, _device: &Device, allocator: &vk_mem::Allocator) {
-        self.instances_buffer.destroy(&allocator);
+        self.instances_buffer.destroy(allocator);
     }
 }

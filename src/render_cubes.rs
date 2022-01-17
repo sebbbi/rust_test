@@ -525,10 +525,10 @@ impl RenderCubes {
             device.destroy_pipeline_layout(self.pipeline_layout, None);
             device.destroy_shader_module(self.vertex_shader_module, None);
             device.destroy_shader_module(self.fragment_shader_module, None);
-            self.index_buffer.destroy(&allocator);
-            self.index_buffer_gpu.destroy(&allocator);
-            self.uniform_buffer.destroy(&allocator);
-            self.uniform_buffer_gpu.destroy(&allocator);
+            self.index_buffer.destroy(allocator);
+            self.index_buffer_gpu.destroy(allocator);
+            self.uniform_buffer.destroy(allocator);
+            self.uniform_buffer_gpu.destroy(allocator);
             device.destroy_descriptor_set_layout(self.desc_set_layout, None);
         }
     }

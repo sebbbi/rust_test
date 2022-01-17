@@ -38,7 +38,7 @@ impl SdfTexture {
             ..Default::default()
         };
 
-        let upload_buffer = VkBuffer::new(&allocator, &image_buffer_info, &alloc_info_cpu);
+        let upload_buffer = VkBuffer::new(allocator, &image_buffer_info, &alloc_info_cpu);
 
         for level in sdf_levels {
             upload_buffer.copy_from_slice(
@@ -66,7 +66,7 @@ impl SdfTexture {
             ..Default::default()
         };
 
-        let image = VkImage::new(&allocator, &texture_create_info, &alloc_info_gpu);
+        let image = VkImage::new(allocator, &texture_create_info, &alloc_info_gpu);
 
         let sampler_info = vk::SamplerCreateInfo {
             mag_filter: vk::Filter::LINEAR,
