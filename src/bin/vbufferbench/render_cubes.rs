@@ -52,7 +52,7 @@ impl RenderCubes {
             ..Default::default()
         };
 
-        const NUM_CUBE_INDICES: usize =  3 * 6 * 2;
+        const NUM_CUBE_INDICES: usize = 3 * 6 * 2;
         const NUM_CUBE_VERTICES: usize = 8;
 
         #[rustfmt::skip]
@@ -191,8 +191,10 @@ impl RenderCubes {
         let pipeline_layout =
             unsafe { device.create_pipeline_layout(&layout_create_info, None) }.unwrap();
 
-        let mut vertex_spv_file = Cursor::new(&include_bytes!("../../../shader/vbuffer_vert.spv")[..]);
-        let mut frag_spv_file = Cursor::new(&include_bytes!("../../../shader/vbuffer_frag.spv")[..]);
+        let mut vertex_spv_file =
+            Cursor::new(&include_bytes!("../../../shader/vbuffer_vert.spv")[..]);
+        let mut frag_spv_file =
+            Cursor::new(&include_bytes!("../../../shader/vbuffer_frag.spv")[..]);
 
         let vertex_code =
             read_spv(&mut vertex_spv_file).expect("Failed to read vertex shader spv file");

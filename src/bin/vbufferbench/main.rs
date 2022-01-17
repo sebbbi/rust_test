@@ -38,7 +38,6 @@ pub struct Vertex {
 }
 
 fn main() {
-
     let diagonal = Vec3 {
         x: 20.0,
         y: 20.0,
