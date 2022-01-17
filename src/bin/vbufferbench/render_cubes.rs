@@ -14,10 +14,7 @@ use crate::vulkan_helpers::*;
 pub struct CubeUniforms {
     pub world_to_screen: Mat4x4,
     pub color: Vec4,
-    pub camera_position: Vec4,
-    pub volume_scale: Vec4,
     pub center_to_edge: Vec4,
-    pub texel_scale: Vec4,
 }
 
 pub struct RenderCubes {

@@ -7,10 +7,7 @@
 layout (binding = 0) uniform UBO {
     mat4 world_to_screen;
     vec4 color;
-    vec4 camera_position;
-    vec4 volume_scale;
     vec4 center_to_edge;
-    vec4 texel_scale;
 } ubo;
 
 struct InstanceData
@@ -24,8 +21,6 @@ layout(std430, binding = 1) buffer Instances
 };
 
 layout (location = 0) out vec3 o_uvw;
-layout (location = 1) out vec4 o_local_camera_pos_lod;
-layout (location = 2) out vec3 o_local_pos;
 
 void main() {
     uint vx = gl_VertexIndex;
@@ -38,14 +33,7 @@ void main() {
     vec3 instance_pos = instances[instance].position.xyz;
 
     vec3 local_pos = pos.xyz * ubo.center_to_edge.xyz;
-    vec3 local_camera_pos = ubo.camera_position.xyz - instance_pos;
 
-    float lod = 0.5 * log2(dot(local_camera_pos, local_camera_pos)) - 6.0;
-
-    vec3 texel_scale_lod = ubo.texel_scale.xyz * exp2(clamp(lod, 0.0, 5.0));
-
-    o_uvw = uvw * (vec3(1.0) - texel_scale_lod) + texel_scale_lod * 0.5;
-    o_local_pos = local_pos;
-    o_local_camera_pos_lod = vec4(local_camera_pos, lod);
+    o_uvw = uvw;
     gl_Position = ubo.world_to_screen * vec4(local_pos + instance_pos, 1.0);
 }

@@ -1,6 +1,5 @@
 #![allow(dead_code)]
 
-const SDF_LEVELS: u32 = 6;
 const NUM_DESCRIPTORS_PER_TYPE: u32 = 1024;
 const NUM_DESCRIPTOR_SETS: u32 = 1024;
 
@@ -10,7 +9,6 @@ mod instances;
 mod render_cubes;
 
 use rust_test::minivector;
-use rust_test::sdf;
 use rust_test::vulkan_base;
 use rust_test::vulkan_helpers;
 
@@ -26,7 +24,6 @@ use winit::{
 };
 
 use minivector::*;
-use sdf::*;
 
 use vulkan_base::*;
 use vulkan_helpers::*;
@@ -40,44 +37,16 @@ pub struct Vertex {
     pub uv: [f32; 2],
 }
 
-pub struct SdfLevel {
-    pub sdf: Sdf,
-    pub offset: u32,
-}
-
 fn main() {
-    // Distance field
-    let sdf = load_sdf_zlib("data/ganymede-and-jupiter.sdf").expect("SDF loading failed");
-
-    let mut sdf_levels = Vec::new();
-    let mut sdf_total_voxels = sdf.header.dim.0 * sdf.header.dim.1 * sdf.header.dim.2;
-    sdf_levels.push(SdfLevel { sdf, offset: 0 });
-    for _ in 1..SDF_LEVELS {
-        let sdf = downsample_2x_sdf(&sdf_levels.last().unwrap().sdf);
-        let offset = sdf_total_voxels;
-        sdf_total_voxels += sdf.header.dim.0 * sdf.header.dim.1 * sdf.header.dim.2;
-        sdf_levels.push(SdfLevel { sdf, offset });
-    }
-
-    let dx = sdf_levels[0].sdf.header.dx;
-    let dim = sdf_levels[0].sdf.header.dim;
 
     let diagonal = Vec3 {
-        x: dx * dim.0 as f32,
-        y: dx * dim.1 as f32,
-        z: dx * dim.2 as f32,
+        x: 20.0,
+        y: 20.0,
+        z: 20.0,
     };
 
     let center_to_edge = diagonal * 0.5;
     let diagonal_length = diagonal.length();
-    let volume_scale = Vec3::from_scalar(diagonal_length) / diagonal;
-
-    let texels = Vec3 {
-        x: dim.0 as f32,
-        y: dim.1 as f32,
-        z: dim.2 as f32,
-    };
-    let texel_scale = Vec3::from_scalar(1.0) / texels;
 
     // Window
     let window_width = 1920;
@@ -386,10 +355,7 @@ fn main() {
                 let cube_uniforms = CubeUniforms {
                     world_to_screen,
                     color,
-                    camera_position: camera.position.to_4d(),
-                    volume_scale: volume_scale.to_4d(),
                     center_to_edge: center_to_edge.to_4d(),
-                    texel_scale: texel_scale.to_4d(),
                 };
 
                 render_cubes.update(&cube_uniforms);
