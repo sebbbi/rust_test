@@ -355,8 +355,9 @@ impl DepthPyramid {
             unsafe { device.create_pipeline_layout(&layout_create_info, None) }.unwrap();
 
         let compute_shader_module_pass_1 = {
-            let mut comp_spv_file =
-                Cursor::new(&include_bytes!("../shader/depth_pyramid_first_mip.spv"));
+            let mut comp_spv_file = Cursor::new(&include_bytes!(
+                "../../../shader/depth_pyramid_first_mip.spv"
+            ));
             let comp_code =
                 read_spv(&mut comp_spv_file).expect("Failed to read compute shader spv file");
             let comp_shader_info = vk::ShaderModuleCreateInfo::builder().code(&comp_code);
@@ -382,8 +383,9 @@ impl DepthPyramid {
         };
 
         let compute_shader_module_downsample = {
-            let mut comp_spv_file =
-                Cursor::new(&include_bytes!("../shader/depth_pyramid_downsample.spv"));
+            let mut comp_spv_file = Cursor::new(&include_bytes!(
+                "../../../shader/depth_pyramid_downsample.spv"
+            ));
             let comp_code =
                 read_spv(&mut comp_spv_file).expect("Failed to read compute shader spv file");
             let comp_shader_info = vk::ShaderModuleCreateInfo::builder().code(&comp_code);

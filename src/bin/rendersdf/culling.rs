@@ -241,7 +241,7 @@ impl Culling {
             unsafe { device.create_pipeline_layout(&layout_create_info, None) }.unwrap();
 
         let compute_shader_module = {
-            let mut comp_spv_file = Cursor::new(&include_bytes!("../shader/culling.spv"));
+            let mut comp_spv_file = Cursor::new(&include_bytes!("../../../shader/culling.spv"));
             let comp_code =
                 read_spv(&mut comp_spv_file).expect("Failed to read compute shader spv file");
             let comp_shader_info = vk::ShaderModuleCreateInfo::builder().code(&comp_code);
