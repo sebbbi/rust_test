@@ -9,16 +9,24 @@ use std::mem;
 use ash::util::*;
 use ash::{vk, Device};
 
+use crate::minivector::*;
 use crate::vulkan_base::*;
 use crate::vulkan_helpers::*;
 
 #[derive(Clone, Copy)]
-pub struct CullingDebugUniforms {
-    pub depth_pyramid_dimension: u32, // pow2 y dimension of mip 0 (texture x is 1.5x wider)
+pub struct CubeUniforms {
+    pub world_to_screen: Mat4x4,
+    pub color: Vec4,
+    pub camera_position: Vec4,
+    pub volume_scale: Vec4,
+    pub center_to_edge: Vec4,
+    pub texel_scale: Vec4,
 }
 
-pub struct CullingDebug {
+pub struct RenderCubes {
     pub pipeline_layout: vk::PipelineLayout,
+    pub index_buffer: VkBuffer,
+    pub index_buffer_gpu: VkBuffer,
     pub uniform_buffer: VkBuffer,
     pub uniform_buffer_gpu: VkBuffer,
     pub desc_set_layout: vk::DescriptorSetLayout,
@@ -28,7 +36,7 @@ pub struct CullingDebug {
     pub fragment_shader_module: vk::ShaderModule,
 }
 
-impl CullingDebug {
+impl RenderCubes {
     #[allow(clippy::too_many_arguments)]
     pub fn new(
         device: &Device,
@@ -36,8 +44,11 @@ impl CullingDebug {
         descriptor_pool: &vk::DescriptorPool,
         render_pass: &vk::RenderPass,
         view_scissor: &VkViewScissor,
-        depth_pyramid_debug_descriptor: &vk::DescriptorImageInfo,
-    ) -> CullingDebug {
+        sdf_texture_descriptor: &vk::DescriptorImageInfo,
+        instances_buffer_descriptor: &vk::DescriptorBufferInfo,
+        visibility_buffer_descriptor: &vk::DescriptorBufferInfo,
+        num_instances: usize,
+    ) -> RenderCubes {
         let alloc_info_cpu = vk_mem::AllocationCreateInfo {
             usage: vk_mem::MemoryUsage::CpuOnly,
             flags: vk_mem::AllocationCreateFlags::MAPPED,
@@ -49,8 +60,54 @@ impl CullingDebug {
             ..Default::default()
         };
 
+        const NUM_CUBE_INDICES: usize = if CUBE_BACKFACE_OPTIMIZATION {
+            3 * 3 * 2
+        } else {
+            3 * 6 * 2
+        };
+        const NUM_CUBE_VERTICES: usize = 8;
+
+        #[rustfmt::skip]
+        let cube_indices = [
+            0u32, 2, 1, 2, 3, 1,
+            5, 4, 1, 1, 4, 0,
+            0, 4, 6, 0, 6, 2,
+            6, 5, 7, 6, 4, 5,
+            2, 6, 3, 6, 7, 3,
+            7, 1, 3, 7, 5, 1,
+        ];
+
+        let num_indices = num_instances * NUM_CUBE_INDICES;
+
+        let index_buffer_data: Vec<u32> = (0..num_indices)
+            .map(|i| {
+                let cube = i / NUM_CUBE_INDICES;
+                let cube_local = i % NUM_CUBE_INDICES;
+                cube_indices[cube_local] + cube as u32 * NUM_CUBE_VERTICES as u32
+            })
+            .collect();
+
+        let index_buffer_info = vk::BufferCreateInfo {
+            size: std::mem::size_of_val(&index_buffer_data[..]) as u64,
+            usage: vk::BufferUsageFlags::TRANSFER_SRC,
+            sharing_mode: vk::SharingMode::EXCLUSIVE,
+            ..Default::default()
+        };
+
+        let index_buffer = VkBuffer::new(allocator, &index_buffer_info, &alloc_info_cpu);
+        index_buffer.copy_from_slice(&index_buffer_data[..], 0);
+
+        let index_buffer_gpu_info = vk::BufferCreateInfo {
+            size: std::mem::size_of_val(&index_buffer_data[..]) as u64,
+            usage: vk::BufferUsageFlags::TRANSFER_DST | vk::BufferUsageFlags::INDEX_BUFFER,
+            sharing_mode: vk::SharingMode::EXCLUSIVE,
+            ..Default::default()
+        };
+
+        let index_buffer_gpu = VkBuffer::new(allocator, &index_buffer_gpu_info, &alloc_info_gpu);
+
         let uniform_buffer_info = vk::BufferCreateInfo {
-            size: std::mem::size_of::<CullingDebugUniforms>() as u64,
+            size: std::mem::size_of::<CubeUniforms>() as u64,
             usage: vk::BufferUsageFlags::TRANSFER_SRC,
             sharing_mode: vk::SharingMode::EXCLUSIVE,
             ..Default::default()
@@ -59,7 +116,7 @@ impl CullingDebug {
         let uniform_buffer = VkBuffer::new(allocator, &uniform_buffer_info, &alloc_info_cpu);
 
         let uniform_buffer_gpu_info = vk::BufferCreateInfo {
-            size: std::mem::size_of::<CullingDebugUniforms>() as u64,
+            size: std::mem::size_of::<CubeUniforms>() as u64,
             usage: vk::BufferUsageFlags::TRANSFER_DST | vk::BufferUsageFlags::UNIFORM_BUFFER,
             sharing_mode: vk::SharingMode::EXCLUSIVE,
             ..Default::default()
@@ -73,14 +130,28 @@ impl CullingDebug {
                 binding: 0,
                 descriptor_type: vk::DescriptorType::UNIFORM_BUFFER,
                 descriptor_count: 1,
-                stage_flags: vk::ShaderStageFlags::FRAGMENT,
+                stage_flags: vk::ShaderStageFlags::FRAGMENT | vk::ShaderStageFlags::VERTEX,
                 ..Default::default()
             },
             vk::DescriptorSetLayoutBinding {
                 binding: 1,
-                descriptor_type: vk::DescriptorType::STORAGE_IMAGE,
+                descriptor_type: vk::DescriptorType::STORAGE_BUFFER,
                 descriptor_count: 1,
-                stage_flags: vk::ShaderStageFlags::FRAGMENT,
+                stage_flags: vk::ShaderStageFlags::FRAGMENT | vk::ShaderStageFlags::VERTEX,
+                ..Default::default()
+            },
+            vk::DescriptorSetLayoutBinding {
+                binding: 2,
+                descriptor_type: vk::DescriptorType::STORAGE_BUFFER,
+                descriptor_count: 1,
+                stage_flags: vk::ShaderStageFlags::FRAGMENT | vk::ShaderStageFlags::VERTEX,
+                ..Default::default()
+            },
+            vk::DescriptorSetLayoutBinding {
+                binding: 3,
+                descriptor_type: vk::DescriptorType::COMBINED_IMAGE_SAMPLER,
+                descriptor_count: 1,
+                stage_flags: vk::ShaderStageFlags::FRAGMENT | vk::ShaderStageFlags::VERTEX,
                 ..Default::default()
             },
         ];
@@ -103,7 +174,7 @@ impl CullingDebug {
         let uniform_buffer_descriptor = vk::DescriptorBufferInfo {
             buffer: uniform_buffer_gpu.buffer,
             offset: 0,
-            range: mem::size_of::<CullingDebugUniforms>() as u64,
+            range: mem::size_of::<CubeUniforms>() as u64,
         };
 
         let write_desc_sets = [
@@ -119,8 +190,24 @@ impl CullingDebug {
                 dst_set: descriptor_sets[0],
                 dst_binding: 1,
                 descriptor_count: 1,
-                descriptor_type: vk::DescriptorType::STORAGE_IMAGE,
-                p_image_info: depth_pyramid_debug_descriptor,
+                descriptor_type: vk::DescriptorType::STORAGE_BUFFER,
+                p_buffer_info: instances_buffer_descriptor,
+                ..Default::default()
+            },
+            vk::WriteDescriptorSet {
+                dst_set: descriptor_sets[0],
+                dst_binding: 2,
+                descriptor_count: 1,
+                descriptor_type: vk::DescriptorType::STORAGE_BUFFER,
+                p_buffer_info: visibility_buffer_descriptor,
+                ..Default::default()
+            },
+            vk::WriteDescriptorSet {
+                dst_set: descriptor_sets[0],
+                dst_binding: 3,
+                descriptor_count: 1,
+                descriptor_type: vk::DescriptorType::COMBINED_IMAGE_SAMPLER,
+                p_image_info: sdf_texture_descriptor,
                 ..Default::default()
             },
         ];
@@ -132,10 +219,17 @@ impl CullingDebug {
         let pipeline_layout =
             unsafe { device.create_pipeline_layout(&layout_create_info, None) }.unwrap();
 
-        let mut vertex_spv_file =
-            Cursor::new(&include_bytes!("../shader/full_screen_triangle_vert.spv")[..]);
-        let mut frag_spv_file =
-            Cursor::new(&include_bytes!("../shader/culling_debug_frag.spv")[..]);
+        let mut vertex_spv_file = Cursor::new(if CUBE_BACKFACE_OPTIMIZATION {
+            &include_bytes!("../../../shader/main_frontface_vert.spv")[..]
+        } else {
+            &include_bytes!("../../../shader/main_vert.spv")[..]
+        });
+
+        let mut frag_spv_file = Cursor::new(if SIMPLE_FRAGMENT_SHADER {
+            &include_bytes!("../../../shader/simple_frag.spv")[..]
+        } else {
+            &include_bytes!("../../../shader/main_frag.spv")[..]
+        });
 
         let vertex_code =
             read_spv(&mut vertex_spv_file).expect("Failed to read vertex shader spv file");
@@ -211,12 +305,12 @@ impl CullingDebug {
         };
 
         let color_blend_attachment_states = [vk::PipelineColorBlendAttachmentState {
-            blend_enable: 1,
-            src_color_blend_factor: vk::BlendFactor::ONE,
-            dst_color_blend_factor: vk::BlendFactor::ONE,
+            blend_enable: 0,
+            src_color_blend_factor: vk::BlendFactor::SRC_COLOR,
+            dst_color_blend_factor: vk::BlendFactor::ONE_MINUS_DST_COLOR,
             color_blend_op: vk::BlendOp::ADD,
-            src_alpha_blend_factor: vk::BlendFactor::ONE,
-            dst_alpha_blend_factor: vk::BlendFactor::ONE,
+            src_alpha_blend_factor: vk::BlendFactor::ZERO,
+            dst_alpha_blend_factor: vk::BlendFactor::ZERO,
             alpha_blend_op: vk::BlendOp::ADD,
             color_write_mask: vk::ColorComponentFlags::all(),
         }];
@@ -252,8 +346,10 @@ impl CullingDebug {
 
         let graphic_pipeline = graphics_pipelines[0];
 
-        CullingDebug {
+        RenderCubes {
             pipeline_layout,
+            index_buffer,
+            index_buffer_gpu,
             uniform_buffer,
             uniform_buffer_gpu,
             desc_set_layout,
@@ -264,8 +360,62 @@ impl CullingDebug {
         }
     }
 
-    pub fn update(&self, uniforms: &CullingDebugUniforms) {
+    pub fn update(&self, uniforms: &CubeUniforms) {
         self.uniform_buffer.copy_from_slice(&[*uniforms], 0);
+    }
+
+    pub fn gpu_setup(&self, device: &Device, command_buffer: &vk::CommandBuffer) {
+        let buffer_copy_regions = vk::BufferCopy {
+            src_offset: 0,
+            dst_offset: 0,
+            size: self.index_buffer.size,
+        };
+
+        let buffer_barrier = vk::BufferMemoryBarrier {
+            dst_access_mask: vk::AccessFlags::TRANSFER_WRITE,
+            buffer: self.index_buffer_gpu.buffer,
+            offset: 0,
+            size: buffer_copy_regions.size,
+            ..Default::default()
+        };
+
+        let buffer_barrier_end = vk::BufferMemoryBarrier {
+            src_access_mask: vk::AccessFlags::TRANSFER_WRITE,
+            dst_access_mask: vk::AccessFlags::INDEX_READ,
+            buffer: self.index_buffer_gpu.buffer,
+            offset: 0,
+            size: buffer_copy_regions.size,
+            ..Default::default()
+        };
+
+        unsafe {
+            device.cmd_pipeline_barrier(
+                *command_buffer,
+                vk::PipelineStageFlags::BOTTOM_OF_PIPE,
+                vk::PipelineStageFlags::TRANSFER,
+                vk::DependencyFlags::empty(),
+                &[],
+                &[buffer_barrier],
+                &[],
+            );
+
+            device.cmd_copy_buffer(
+                *command_buffer,
+                self.index_buffer.buffer,
+                self.index_buffer_gpu.buffer,
+                &[buffer_copy_regions],
+            );
+
+            device.cmd_pipeline_barrier(
+                *command_buffer,
+                vk::PipelineStageFlags::TRANSFER,
+                vk::PipelineStageFlags::VERTEX_INPUT,
+                vk::DependencyFlags::empty(),
+                &[],
+                &[buffer_barrier_end],
+                &[],
+            );
+        };
     }
 
     pub fn gpu_draw(&self, device: &Device, command_buffer: &vk::CommandBuffer) {
@@ -322,7 +472,12 @@ impl CullingDebug {
         }
     }
 
-    pub fn gpu_draw_main_render_pass(&self, device: &Device, command_buffer: &vk::CommandBuffer) {
+    pub fn gpu_draw_main_render_pass(
+        &self,
+        device: &Device,
+        command_buffer: &vk::CommandBuffer,
+        argument_buffer: Option<&vk::Buffer>,
+    ) {
         unsafe {
             device.cmd_bind_descriptor_sets(
                 *command_buffer,
@@ -339,7 +494,28 @@ impl CullingDebug {
                 self.graphic_pipeline,
             );
 
-            device.cmd_draw(*command_buffer, 3, 1, 0, 0);
+            device.cmd_bind_index_buffer(
+                *command_buffer,
+                self.index_buffer_gpu.buffer,
+                0,
+                vk::IndexType::UINT32,
+            );
+
+            match argument_buffer {
+                Some(buffer) => {
+                    device.cmd_draw_indexed_indirect(*command_buffer, *buffer, 0, 1, 0);
+                }
+                None => {
+                    device.cmd_draw_indexed(
+                        *command_buffer,
+                        self.index_buffer_gpu.size as u32 / std::mem::size_of::<u32>() as u32,
+                        1,
+                        0,
+                        0,
+                        1,
+                    );
+                }
+            }
         }
     }
 
@@ -349,6 +525,8 @@ impl CullingDebug {
             device.destroy_pipeline_layout(self.pipeline_layout, None);
             device.destroy_shader_module(self.vertex_shader_module, None);
             device.destroy_shader_module(self.fragment_shader_module, None);
+            self.index_buffer.destroy(allocator);
+            self.index_buffer_gpu.destroy(allocator);
             self.uniform_buffer.destroy(allocator);
             self.uniform_buffer_gpu.destroy(allocator);
             device.destroy_descriptor_set_layout(self.desc_set_layout, None);

@@ -13,11 +13,11 @@ mod depth_pyramid;
 mod instances;
 mod render_cubes;
 mod sdf_texture;
-mod vulkan_base;
-mod vulkan_helpers;
 
 use rust_test::minivector;
 use rust_test::sdf;
+use rust_test::vulkan_base;
+use rust_test::vulkan_helpers;
 
 use std::time::Instant;
 
