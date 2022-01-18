@@ -6,7 +6,7 @@ const NUM_DESCRIPTOR_SETS: u32 = 1024;
 extern crate winit;
 
 mod instances;
-mod render_cubes;
+mod render_grids;
 
 use rust_test::minivector;
 use rust_test::vulkan_base;
@@ -29,7 +29,7 @@ use vulkan_base::*;
 use vulkan_helpers::*;
 
 use instances::*;
-use render_cubes::*;
+use render_grids::*;
 
 #[derive(Clone, Copy)]
 pub struct Vertex {
@@ -39,9 +39,9 @@ pub struct Vertex {
 
 fn main() {
     let diagonal = Vec3 {
-        x: 20.0,
-        y: 20.0,
-        z: 20.0,
+        x: 200.0,
+        y: 200.0,
+        z: 200.0,
     };
 
     let center_to_edge = diagonal * 0.5;
@@ -182,11 +182,11 @@ fn main() {
     }
     .unwrap();
 
-    // Cube instances
+    // Grid instances
     let instances = Instances::new(&base.device, &base.allocator, diagonal_length);
 
-    // Cube renderer
-    let render_cubes = RenderCubes::new(
+    // Grid renderer
+    let render_grids = RenderGrids::new(
         &base.device,
         &base.allocator,
         &descriptor_pool,
@@ -205,7 +205,7 @@ fn main() {
         &[],
         |device, command_buffer| {
             // GPU setup commands
-            render_cubes.gpu_setup(device, &command_buffer);
+            render_grids.gpu_setup(device, &command_buffer);
         },
     );
 
@@ -351,13 +351,13 @@ fn main() {
                     10000000.0,
                 );
 
-                let cube_uniforms = CubeUniforms {
+                let grid_uniforms = GridUniforms {
                     world_to_screen,
                     color,
                     center_to_edge: center_to_edge.to_4d(),
                 };
 
-                render_cubes.update(&cube_uniforms);
+                render_grids.update(&grid_uniforms);
 
                 // Setup render passs
                 let clear_values = [
@@ -392,7 +392,7 @@ fn main() {
                     &[base.rendering_complete_semaphore],
                     |device, command_buffer| {
                         // Draw/setup (before main render pass)
-                        render_cubes.gpu_draw(device, &command_buffer);
+                        render_grids.gpu_draw(device, &command_buffer);
 
                         // Render pass
                         unsafe {
@@ -406,7 +406,7 @@ fn main() {
                         }
 
                         // Draw (main render pass)
-                        render_cubes.gpu_draw_main_render_pass(device, &command_buffer, None);
+                        render_grids.gpu_draw_main_render_pass(device, &command_buffer, None);
 
                         unsafe {
                             device.cmd_end_render_pass(command_buffer);
@@ -500,7 +500,7 @@ fn main() {
 
     // Cleanup
     instances.destroy(&base.device, &base.allocator);
-    render_cubes.destroy(&base.device, &base.allocator);
+    render_grids.destroy(&base.device, &base.allocator);
     unsafe {
         base.device.destroy_descriptor_pool(descriptor_pool, None);
         for framebuffer in framebuffers {

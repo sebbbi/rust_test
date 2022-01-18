@@ -1,4 +1,4 @@
-pub const NUM_INSTANCES: usize = 1024 * 1024;
+pub const NUM_INSTANCES: usize = 1024 * 128;
 pub const CLOUD_RADIUS: f32 = 8000.0;
 
 use rand::Rng;

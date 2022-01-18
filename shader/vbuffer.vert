@@ -2,7 +2,9 @@
 #extension GL_ARB_separate_shader_objects : enable
 #extension GL_ARB_shading_language_420pack : enable
 
-#define USE_VISIBILITY_DATA
+// TODO: Move to UBO
+#define GRID_DIM_VX 8
+#define NUM_GRID_VERTICES (GRID_DIM_VX * GRID_DIM_VX)
 
 layout (binding = 0) uniform UBO {
     mat4 world_to_screen;
@@ -24,10 +26,14 @@ layout (location = 0) out vec3 o_uvw;
 
 void main() {
     uint vx = gl_VertexIndex;
-    uint instance = vx >> 3;
+    uint instance = vx / NUM_GRID_VERTICES;
+    uint instance_local = vx - instance * NUM_GRID_VERTICES;
 
-    uvec3 xyz = uvec3(vx & 0x1, (vx & 0x4) >> 2, (vx & 0x2) >> 1);
-    vec3 uvw = vec3(xyz);
+    uint x = instance_local % GRID_DIM_VX;
+    uint y = instance_local / GRID_DIM_VX;
+
+    uvec3 xyz = uvec3(x, y, 0);
+    vec3 uvw = vec3(xyz) * (1.0 / (GRID_DIM_VX - 1));
     vec3 pos = uvw * 2.0 - 1.0;
 
     vec3 instance_pos = instances[instance].position.xyz;

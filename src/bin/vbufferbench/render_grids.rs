@@ -11,13 +11,13 @@ use crate::vulkan_base::*;
 use crate::vulkan_helpers::*;
 
 #[derive(Clone, Copy)]
-pub struct CubeUniforms {
+pub struct GridUniforms {
     pub world_to_screen: Mat4x4,
     pub color: Vec4,
     pub center_to_edge: Vec4,
 }
 
-pub struct RenderCubes {
+pub struct RenderGrids {
     pub pipeline_layout: vk::PipelineLayout,
     pub index_buffer: VkBuffer,
     pub index_buffer_gpu: VkBuffer,
@@ -30,7 +30,7 @@ pub struct RenderCubes {
     pub fragment_shader_module: vk::ShaderModule,
 }
 
-impl RenderCubes {
+impl RenderGrids {
     #[allow(clippy::too_many_arguments)]
     pub fn new(
         device: &Device,
@@ -40,7 +40,7 @@ impl RenderCubes {
         view_scissor: &VkViewScissor,
         instances_buffer_descriptor: &vk::DescriptorBufferInfo,
         num_instances: usize,
-    ) -> RenderCubes {
+    ) -> RenderGrids {
         let alloc_info_cpu = vk_mem::AllocationCreateInfo {
             usage: vk_mem::MemoryUsage::CpuOnly,
             flags: vk_mem::AllocationCreateFlags::MAPPED,
@@ -52,26 +52,35 @@ impl RenderCubes {
             ..Default::default()
         };
 
-        const NUM_CUBE_INDICES: usize = 3 * 6 * 2;
-        const NUM_CUBE_VERTICES: usize = 8;
+        const GRID_DIM: usize = 7;
+        const NUM_GRID_INDICES: usize = GRID_DIM * GRID_DIM * 2 * 3;
+        const NUM_GRID_VERTICES: usize = (GRID_DIM + 1) * (GRID_DIM + 1);
 
-        #[rustfmt::skip]
-        let cube_indices = [
-            0u32, 2, 1, 2, 3, 1,
-            5, 4, 1, 1, 4, 0,
-            0, 4, 6, 0, 6, 2,
-            6, 5, 7, 6, 4, 5,
-            2, 6, 3, 6, 7, 3,
-            7, 1, 3, 7, 5, 1,
-        ];
+        let mut grid_indices: [u32; NUM_GRID_INDICES] = [0; NUM_GRID_INDICES];
+        for y in 0..GRID_DIM {
+            for x in 0..GRID_DIM {
+                let grid = x + y * GRID_DIM;
+                let vertex = (x + y * (GRID_DIM + 1)) as u32;
 
-        let num_indices = num_instances * NUM_CUBE_INDICES;
+                // Upper left triangle
+                grid_indices[grid * 6 + 0] = 0 + vertex;
+                grid_indices[grid * 6 + 1] = 1 + vertex;
+                grid_indices[grid * 6 + 2] = (GRID_DIM + 1) as u32 + vertex;
+
+                // Lower right triangle
+                grid_indices[grid * 6 + 3] = (GRID_DIM + 1) as u32 + vertex;
+                grid_indices[grid * 6 + 4] = 1 + vertex;
+                grid_indices[grid * 6 + 5] = 1 + (GRID_DIM + 1) as u32 + vertex;
+            }
+        }
+
+        let num_indices = num_instances * NUM_GRID_INDICES;
 
         let index_buffer_data: Vec<u32> = (0..num_indices)
             .map(|i| {
-                let cube = i / NUM_CUBE_INDICES;
-                let cube_local = i % NUM_CUBE_INDICES;
-                cube_indices[cube_local] + cube as u32 * NUM_CUBE_VERTICES as u32
+                let grid = i / NUM_GRID_INDICES;
+                let grid_local = i % NUM_GRID_INDICES;
+                grid_indices[grid_local] + grid as u32 * NUM_GRID_VERTICES as u32
             })
             .collect();
 
@@ -95,7 +104,7 @@ impl RenderCubes {
         let index_buffer_gpu = VkBuffer::new(allocator, &index_buffer_gpu_info, &alloc_info_gpu);
 
         let uniform_buffer_info = vk::BufferCreateInfo {
-            size: std::mem::size_of::<CubeUniforms>() as u64,
+            size: std::mem::size_of::<GridUniforms>() as u64,
             usage: vk::BufferUsageFlags::TRANSFER_SRC,
             sharing_mode: vk::SharingMode::EXCLUSIVE,
             ..Default::default()
@@ -104,7 +113,7 @@ impl RenderCubes {
         let uniform_buffer = VkBuffer::new(allocator, &uniform_buffer_info, &alloc_info_cpu);
 
         let uniform_buffer_gpu_info = vk::BufferCreateInfo {
-            size: std::mem::size_of::<CubeUniforms>() as u64,
+            size: std::mem::size_of::<GridUniforms>() as u64,
             usage: vk::BufferUsageFlags::TRANSFER_DST | vk::BufferUsageFlags::UNIFORM_BUFFER,
             sharing_mode: vk::SharingMode::EXCLUSIVE,
             ..Default::default()
@@ -162,7 +171,7 @@ impl RenderCubes {
         let uniform_buffer_descriptor = vk::DescriptorBufferInfo {
             buffer: uniform_buffer_gpu.buffer,
             offset: 0,
-            range: mem::size_of::<CubeUniforms>() as u64,
+            range: mem::size_of::<GridUniforms>() as u64,
         };
 
         let write_desc_sets = [
@@ -311,7 +320,7 @@ impl RenderCubes {
 
         let graphic_pipeline = graphics_pipelines[0];
 
-        RenderCubes {
+        RenderGrids {
             pipeline_layout,
             index_buffer,
             index_buffer_gpu,
@@ -325,7 +334,7 @@ impl RenderCubes {
         }
     }
 
-    pub fn update(&self, uniforms: &CubeUniforms) {
+    pub fn update(&self, uniforms: &GridUniforms) {
         self.uniform_buffer.copy_from_slice(&[*uniforms], 0);
     }
 
