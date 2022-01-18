@@ -218,8 +218,8 @@ fn main() {
     let mut camera = Camera {
         position: Vec3 {
             x: 0.0,
-            y: 25.0,
-            z: 50.0,
+            y: 2000.0,
+            z: 4000.0,
         },
         direction: Vec3 {
             x: 0.0,
