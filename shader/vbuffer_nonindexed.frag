@@ -19,6 +19,8 @@ layout(std430, binding = 1) buffer Instances
 };
 
 layout (location = 0) in vec3 o_uvw;
+layout (location = 1) flat in uint o_prim_index;
+
 layout (location = 0) out vec4 uFragColor;
 
 uint hash1(uint n) 
@@ -30,12 +32,10 @@ uint hash1(uint n)
 }
 
 void main() {
-    uint prim_id = gl_PrimitiveID;
+    uint prim_id = o_prim_index;
     uint hash = hash1(prim_id);
 
-    vec3 color = vec3(float(hash & 0xff) / 255.0f, float((hash>>8) & 0xff) / 255.0f, float((hash>>16) & 0xff) / 255.0f);
+    vec3 hashColor = vec3(float(hash & 0xff) / 255.0f, float((hash>>8) & 0xff) / 255.0f, float((hash>>16) & 0xff) / 255.0f);
 
-    uFragColor = vec4(color, 1.0);
-
-    //uFragColor = vec4(o_uvw, 1.0);
+    uFragColor = vec4(hashColor * 0.9 + o_uvw * 0.1, 1.0);
 }

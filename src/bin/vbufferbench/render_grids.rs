@@ -1,3 +1,11 @@
+enum GridTechnique {
+    Color,
+    PrimId,
+    NonIndexed,
+}
+
+const GRID_TECHNIQUE: GridTechnique = GridTechnique::Color;
+
 use std::default::Default;
 use std::ffi::CString;
 use std::io::Cursor;
@@ -200,11 +208,19 @@ impl RenderGrids {
         let pipeline_layout =
             unsafe { device.create_pipeline_layout(&layout_create_info, None) }.unwrap();
 
-        let mut vertex_spv_file =
-            Cursor::new(&include_bytes!("../../../shader/vbuffer_vert.spv")[..]);
-        let mut frag_spv_file =
-            Cursor::new(&include_bytes!("../../../shader/vbuffer_frag.spv")[..]);
 
+        let mut vertex_spv_file = Cursor::new(match GRID_TECHNIQUE {
+            GridTechnique::Color => &include_bytes!("../../../shader/vbuffer_vert.spv")[..],
+            GridTechnique::PrimId => &include_bytes!("../../../shader/vbuffer_vert.spv")[..],
+            GridTechnique::NonIndexed => &include_bytes!("../../../shader/vbuffer_nonindexed_vert.spv")[..],
+        });
+
+        let mut frag_spv_file = Cursor::new(match GRID_TECHNIQUE {
+            GridTechnique::Color => &include_bytes!("../../../shader/vbuffer_color_frag.spv")[..],
+            GridTechnique::PrimId => &include_bytes!("../../../shader/vbuffer_primid_frag.spv")[..],
+            GridTechnique::NonIndexed => &include_bytes!("../../../shader/vbuffer_nonindexed_frag.spv")[..],
+        });
+                            
         let vertex_code =
             read_spv(&mut vertex_spv_file).expect("Failed to read vertex shader spv file");
         let vertex_shader_info = vk::ShaderModuleCreateInfo::builder().code(&vertex_code);
@@ -450,7 +466,6 @@ impl RenderGrids {
         &self,
         device: &Device,
         command_buffer: &vk::CommandBuffer,
-        argument_buffer: Option<&vk::Buffer>,
     ) {
         unsafe {
             device.cmd_bind_descriptor_sets(
@@ -475,20 +490,23 @@ impl RenderGrids {
                 vk::IndexType::UINT32,
             );
 
-            match argument_buffer {
-                Some(buffer) => {
-                    device.cmd_draw_indexed_indirect(*command_buffer, *buffer, 0, 1, 0);
-                }
-                None => {
-                    device.cmd_draw_indexed(
-                        *command_buffer,
-                        self.index_buffer_gpu.size as u32 / std::mem::size_of::<u32>() as u32,
-                        1,
-                        0,
-                        0,
-                        1,
-                    );
-                }
+            match GRID_TECHNIQUE {
+                GridTechnique::NonIndexed =>                 
+                    device.cmd_draw(
+                            *command_buffer,
+                            self.index_buffer_gpu.size as u32 / std::mem::size_of::<u32>() as u32,
+                            1,
+                            0,
+                            0,
+                        ),
+                _ => device.cmd_draw_indexed(
+                    *command_buffer,
+                    self.index_buffer_gpu.size as u32 / std::mem::size_of::<u32>() as u32,
+                    1,
+                    0,
+                    0,
+                    0,
+                )
             }
         }
     }

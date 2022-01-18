@@ -6,7 +6,11 @@ glslc.exe shader/main_frontface.vert -o shader/main_frontface_vert.spv
 glslc.exe shader/simple.frag -o shader/simple_frag.spv
 
 glslc.exe shader/vbuffer.vert -o shader/vbuffer_vert.spv
-glslc.exe shader/vbuffer.frag -o shader/vbuffer_frag.spv
+glslc.exe shader/vbuffer_nonindexed.vert -o shader/vbuffer_nonindexed_vert.spv
+
+glslc.exe shader/vbuffer_primid.frag -o shader/vbuffer_primid_frag.spv
+glslc.exe shader/vbuffer_nonindexed.frag -o shader/vbuffer_nonindexed_frag.spv
+glslc.exe shader/vbuffer_color.frag -o shader/vbuffer_color_frag.spv
 
 glslc.exe shader/depth_pyramid_first_mip.comp -o shader/depth_pyramid_first_mip.spv
 glslc.exe shader/depth_pyramid_downsample.comp -o shader/depth_pyramid_downsample.spv

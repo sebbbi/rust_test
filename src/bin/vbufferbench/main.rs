@@ -39,9 +39,9 @@ pub struct Vertex {
 
 fn main() {
     let diagonal = Vec3 {
-        x: 200.0,
-        y: 200.0,
-        z: 200.0,
+        x: 150.0,
+        y: 150.0,
+        z: 150.0,
     };
 
     let center_to_edge = diagonal * 0.5;
@@ -406,7 +406,7 @@ fn main() {
                         }
 
                         // Draw (main render pass)
-                        render_grids.gpu_draw_main_render_pass(device, &command_buffer, None);
+                        render_grids.gpu_draw_main_render_pass(device, &command_buffer);
 
                         unsafe {
                             device.cmd_end_render_pass(command_buffer);
