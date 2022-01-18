@@ -236,6 +236,7 @@ impl VulkanBase {
             let device_extension_names_raw = [Swapchain::name().as_ptr()];
             let features = vk::PhysicalDeviceFeatures {
                 shader_clip_distance: 1,
+                geometry_shader: 1, // Needed for gl_PrimitiveID. This is stupid, but it seems to be tied to GS.
                 ..Default::default()
             };
             let priorities = [1.0];
