@@ -2,9 +2,11 @@ enum GridTechnique {
     Color,
     PrimId,
     NonIndexed,
+    LeadingVertex,
+    GetAttributeAtVertex,
 }
 
-const GRID_TECHNIQUE: GridTechnique = GridTechnique::Color;
+const GRID_TECHNIQUE: GridTechnique = GridTechnique::LeadingVertex;
 
 use std::default::Default;
 use std::ffi::CString;
@@ -62,13 +64,15 @@ impl RenderGrids {
 
         const GRID_DIM: usize = 7;
         const NUM_GRID_INDICES: usize = GRID_DIM * GRID_DIM * 2 * 3;
-        const NUM_GRID_VERTICES: usize = (GRID_DIM + 1) * (GRID_DIM + 1);
+
+        let grid_stride = if let GridTechnique::LeadingVertex = GRID_TECHNIQUE { (GRID_DIM + 1) * 2 } else { GRID_DIM + 1 };
+        let instance_stride = if let GridTechnique::LeadingVertex = GRID_TECHNIQUE { GRID_DIM * (GRID_DIM + 1) * 2 } else { (GRID_DIM + 1) * (GRID_DIM + 1) };
 
         let mut grid_indices: [u32; NUM_GRID_INDICES] = [0; NUM_GRID_INDICES];
         for y in 0..GRID_DIM {
             for x in 0..GRID_DIM {
                 let grid = x + y * GRID_DIM;
-                let vertex = (x + y * (GRID_DIM + 1)) as u32;
+                let vertex = (x + y * grid_stride) as u32;
 
                 // Upper left triangle
                 grid_indices[grid * 6 + 0] = 0 + vertex;
@@ -88,7 +92,7 @@ impl RenderGrids {
             .map(|i| {
                 let grid = i / NUM_GRID_INDICES;
                 let grid_local = i % NUM_GRID_INDICES;
-                grid_indices[grid_local] + grid as u32 * NUM_GRID_VERTICES as u32
+                grid_indices[grid_local] + grid as u32 * instance_stride as u32
             })
             .collect();
 
@@ -213,12 +217,16 @@ impl RenderGrids {
             GridTechnique::Color => &include_bytes!("../../../shader/vbuffer_vert.spv")[..],
             GridTechnique::PrimId => &include_bytes!("../../../shader/vbuffer_vert.spv")[..],
             GridTechnique::NonIndexed => &include_bytes!("../../../shader/vbuffer_nonindexed_vert.spv")[..],
+            GridTechnique::LeadingVertex => &include_bytes!("../../../shader/vbuffer_leadingvertex_vert.spv")[..],
+            GridTechnique::GetAttributeAtVertex => &include_bytes!("../../../shader/vbuffer_getattributeatvertex_vert.spv")[..],
         });
 
         let mut frag_spv_file = Cursor::new(match GRID_TECHNIQUE {
             GridTechnique::Color => &include_bytes!("../../../shader/vbuffer_color_frag.spv")[..],
             GridTechnique::PrimId => &include_bytes!("../../../shader/vbuffer_primid_frag.spv")[..],
             GridTechnique::NonIndexed => &include_bytes!("../../../shader/vbuffer_nonindexed_frag.spv")[..],
+            GridTechnique::LeadingVertex => &include_bytes!("../../../shader/vbuffer_leadingvertex_frag.spv")[..],
+            GridTechnique::GetAttributeAtVertex => &include_bytes!("../../../shader/vbuffer_getattributeatvertex_frag.spv")[..],
         });
                             
         let vertex_code =
