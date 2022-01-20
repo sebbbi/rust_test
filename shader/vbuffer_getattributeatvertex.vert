@@ -23,7 +23,7 @@ layout(std430, binding = 1) buffer Instances
 };
 
 layout (location = 0) out vec3 o_uvw;
-layout (location = 1) flat out uvec4 o_prim_ids;
+layout (location = 1) flat out uint o_vert_id;
 
 void main() {
     uint vx = gl_VertexIndex;
@@ -40,6 +40,8 @@ void main() {
     vec3 instance_pos = instances[instance].position.xyz;
 
     vec3 local_pos = pos.xyz * ubo.center_to_edge.xyz;
+
+    o_vert_id = vx;
 
     o_uvw = uvw;
     gl_Position = ubo.world_to_screen * vec4(local_pos + instance_pos, 1.0);
