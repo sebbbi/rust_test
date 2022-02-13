@@ -236,7 +236,7 @@ impl VulkanBase {
                 .expect("Couldn't find suitable device.");
             let queue_family_index = queue_family_index as u32;
 
-            let device_extension_names = [Swapchain::name(), &CString::new("VK_NV_mesh_shader").unwrap()];
+            let device_extension_names = [Swapchain::name()/*, &CString::new("VK_NV_mesh_shader").unwrap()*/];
             let device_extension_names_raw: Vec<*const i8> = device_extension_names
                 .iter()
                 .map(|raw_name| raw_name.as_ptr())
@@ -248,7 +248,7 @@ impl VulkanBase {
                 ..Default::default()
             };
 
-            let mut mesh_shader = vk::PhysicalDeviceMeshShaderFeaturesNV::builder().mesh_shader(true).task_shader(true).build();
+            //let mut mesh_shader = vk::PhysicalDeviceMeshShaderFeaturesNV::builder().mesh_shader(true).task_shader(true).build();
 
             let priorities = [1.0];
 
@@ -258,7 +258,7 @@ impl VulkanBase {
                 .build()];
 
             let device_create_info = vk::DeviceCreateInfo::builder()
-                .push_next(&mut mesh_shader)
+                //.push_next(&mut mesh_shader)
                 .queue_create_infos(&queue_info)
                 .enabled_extension_names(&device_extension_names_raw)
                 .enabled_features(&features);
