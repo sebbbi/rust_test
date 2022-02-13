@@ -1,22 +1,31 @@
 # Rust & Vulkan test projects
-Contains test projects for Rust & Vulkan
+Contains test projects and tools for Rust & Vulkan.
 
+* rendersdf
+* sdf2tilemap
+* sdftool
+* vbufferbench
+
+# rendersdf
 ![Screenshot](screenshot.jpg)
 
-The first test project renders 1 million cubes, each containing a 950 MB (uncompressed) distance field volume. It uses an optimized cube renderer rendering only front faces of each cube. 
+SDF render test project (rendersdf) renders 1 million cubes, each containing a 950 MB (uncompressed) distance field volume. It uses an optimized cube renderer rendering only front faces of each cube. 
 
-The second test project is going to be using sparse octree storing a hierarchy of distance field volume bricks, each rasterized as a cube. This will both reduce the SDF volume memory consumption by 98% and make the runtime faster, as most rays missing the object will not be cast at at all, and the remaining rays will start very close to the surface.
+An improved version is coming using an sparse octree storing a hierarchy of distance field volume bricks, each rasterized as a cube. This will both reduce the SDF volume memory consumption by 98% and make the runtime faster, as most rays missing the object will not be cast at at all, and the remaining rays will start very close to the surface.
 
-These projects use a GPU-driven culling solution similar to the one we presented at SIGGRAPH 2015 (Media Molecule Dreams and UE5 Nanite also use similar culling):
+The SDF renderer uses a GPU-driven culling solution similar to the one we presented at SIGGRAPH 2015 (Media Molecule Dreams and UE5 Nanite also use similar culling):
 https://advances.realtimerendering.com/s2015/aaltonenhaar_siggraph2015_combined_final_footer_220dpi.pdf
 
 Various optimization techniques will be tested on top of this prototype.
 
-# Todo
+**Todo:**
 * Conservative depth output
 * Command line tool for SDF processing (sdf.rs functionality)
 * Sparse SDF test project
 * More than one SDF volume (easy to implement for sparse SDF)
+
+# vbufferbench
+A simple benchmark tool for comparing the performance of different V-buffer triangle-id rendering techniques.
 
 # Install instructions
 * Install rustup: https://www.rust-lang.org/tools/install
@@ -25,11 +34,11 @@ Various optimization techniques will be tested on top of this prototype.
 * Run (cmd): **git lfs install**
 * Clone repository (cmd): **git clone https://github.com/sebbbi/rust_test.git**
 * **IMPORTANT:** Zip download does NOT support git LFS!
-* Run (cmd): **cargo run --release**
-* If you want to recompile shaders, Run (cmd): **compile_shaders.bat**
+* Run (cmd): **cargo run --release --bin TEST_NAME**
+* If you want to recompile shaders, Run (cmd): **compile_shaders.bat** (or .sh for Mac)
 
-# How to use the prototype
-* Start (cmd): **cargo run --release**
+# How to use the prototypes
+* Start (cmd): **cargo run --release --bin TEST_NAME**
 * WASD = fly around
 * Drag mouse left button = rotate camera
 * Mouse wheel = jump backward / forward

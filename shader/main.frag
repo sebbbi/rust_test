@@ -40,11 +40,7 @@ layout (location = 2) in vec3 o_local_pos;
 layout (location = 0) out vec4 uFragColor;
 
 bool outside(vec3 uwv) {
-    // saturate instructions are free
-    if (uwv.x != clamp(uwv.x, 0.0, 1.0)) return true;
-    if (uwv.y != clamp(uwv.y, 0.0, 1.0)) return true;
-    if (uwv.z != clamp(uwv.z, 0.0, 1.0)) return true;
-    return false;
+    return any(greaterThan(abs(uwv - vec3(0.5, 0.5, 0.5)), vec3(0.5, 0.5, 0.5)));
 }
 
 vec3 normal(vec3 uvw) {

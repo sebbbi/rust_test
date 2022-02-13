@@ -2,6 +2,8 @@
 #extension GL_ARB_separate_shader_objects : enable
 #extension GL_ARB_shading_language_420pack : enable
 
+#define USE_VISIBILITY_DATA
+
 layout (binding = 0) uniform UBO {
     mat4 world_to_screen;
     vec4 color;
