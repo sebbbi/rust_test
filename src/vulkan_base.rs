@@ -181,7 +181,7 @@ impl VulkanBase {
 
             let create_info = vk::InstanceCreateInfo::builder()
                 .application_info(&appinfo)
-                //.enabled_layer_names(&layers_names_raw)
+                .enabled_layer_names(&layers_names_raw)
                 .enabled_extension_names(&extension_names_raw);
 
             let instance: Instance = entry
@@ -244,7 +244,7 @@ impl VulkanBase {
 
             let features = vk::PhysicalDeviceFeatures {
                 shader_clip_distance: 1,
-                geometry_shader: 1,
+                //geometry_shader: 1,
                 ..Default::default()
             };
 
