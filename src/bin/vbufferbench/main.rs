@@ -188,6 +188,7 @@ fn main() {
     // Grid renderer
     let render_grids = RenderGrids::new(
         &base.device,
+        &base.instance,
         &base.allocator,
         &descriptor_pool,
         &render_pass,

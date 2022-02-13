@@ -9,12 +9,14 @@ glslc.exe shader/vbuffer.vert -o shader/vbuffer_vert.spv
 glslc.exe shader/vbuffer_nonindexed.vert -o shader/vbuffer_nonindexed_vert.spv
 glslc.exe shader/vbuffer_leadingvertex.vert -o shader/vbuffer_leadingvertex_vert.spv
 glslc.exe shader/vbuffer_getattributeatvertex.vert -o shader/vbuffer_getattributeatvertex_vert.spv
+glslc.exe shader/vbuffer_meshshader.mesh -o shader/vbuffer_meshshader_mesh.spv
 
 glslc.exe shader/vbuffer_color.frag -o shader/vbuffer_color_frag.spv
 glslc.exe shader/vbuffer_primid.frag -o shader/vbuffer_primid_frag.spv
 glslc.exe shader/vbuffer_nonindexed.frag -o shader/vbuffer_nonindexed_frag.spv
 glslc.exe shader/vbuffer_leadingvertex.frag -o shader/vbuffer_leadingvertex_frag.spv
 glslc.exe shader/vbuffer_getattributeatvertex.frag -o shader/vbuffer_getattributeatvertex_frag.spv
+glslc.exe shader/vbuffer_meshshader.frag -o shader/vbuffer_meshshader_frag.spv
 
 glslc.exe shader/depth_pyramid_first_mip.comp -o shader/depth_pyramid_first_mip.spv
 glslc.exe shader/depth_pyramid_downsample.comp -o shader/depth_pyramid_downsample.spv

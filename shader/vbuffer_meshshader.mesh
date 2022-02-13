@@ -1,0 +1,109 @@
+#version 450
+#extension GL_ARB_separate_shader_objects : enable
+#extension GL_ARB_shading_language_420pack : enable
+#extension GL_NV_mesh_shader : require
+
+// TODO: Move to UBO
+#define GRID_DIM 7
+#define GRID_DIM_VX 8
+#define NUM_GRID_VERTICES (GRID_DIM_VX * GRID_DIM_VX)
+#define NUM_GRID_TRIANGLES (GRID_DIM * GRID_DIM * 2)
+#define GROUP_SIZE 32
+
+layout (binding = 0) uniform UBO {
+    mat4 world_to_screen;
+    vec4 color;
+    vec4 center_to_edge;
+} ubo;
+
+struct InstanceData
+{
+	vec4 position;
+};
+
+layout(std430, binding = 1) buffer Instances
+{
+    InstanceData instances[];
+};
+
+layout(local_size_x=GROUP_SIZE) in; 
+layout(triangles, max_vertices = NUM_GRID_VERTICES, max_primitives = NUM_GRID_TRIANGLES) out;
+ 
+layout (location = 0) out PerVertexData
+{
+  vec3 uvw;
+} v_out[];   
+ 
+
+perprimitiveNV layout (location = 1) out PerPrimitiveData
+{
+  uint primitiveID;
+} p_out[];
+ 
+void vertexFunction(uint vx, inout vec4 o_position, inout vec3 o_uvw) {
+    uint instance = vx / NUM_GRID_VERTICES;
+    uint instance_local = vx - instance * NUM_GRID_VERTICES;
+
+    uint x = instance_local % GRID_DIM_VX;
+    uint y = instance_local / GRID_DIM_VX;
+
+    uvec3 xyz = uvec3(x, y, 0);
+    vec3 uvw = vec3(xyz) * (1.0 / (GRID_DIM_VX - 1));
+    vec3 pos = uvw * 2.0 - 1.0;
+
+    vec3 instance_pos = instances[instance].position.xyz;
+    vec3 local_pos = pos.xyz * ubo.center_to_edge.xyz;
+
+    o_uvw = uvw;
+    o_position = ubo.world_to_screen * vec4(local_pos + instance_pos, 1.0);
+}
+
+void main() {
+    uint thread_id = gl_LocalInvocationID.x;
+
+    // NOTE: NUM_GRID_VERTICES must be dividable by GROUP_SIZE
+    for (uint i=0; i<NUM_GRID_VERTICES/GROUP_SIZE; ++i)
+    {
+        uint offset = i * GROUP_SIZE;
+        uint tid = thread_id + offset;
+     
+        vec4 o_position;
+        vec3 o_uvw;
+        vertexFunction(tid + gl_WorkGroupID.x * NUM_GRID_VERTICES, o_position, o_uvw);
+        gl_MeshVerticesNV[tid].gl_Position = o_position;
+        v_out[tid].uvw = o_uvw;
+    }
+
+    for (uint i=0; i<(NUM_GRID_TRIANGLES+GROUP_SIZE-1)/GROUP_SIZE; ++i) // Round up
+    {
+        uint offset = i * GROUP_SIZE;
+        uint tid = thread_id + offset;
+
+        if (tid < NUM_GRID_TRIANGLES)
+        {
+            p_out[tid].primitiveID = tid + gl_WorkGroupID.x * NUM_GRID_TRIANGLES;
+
+            uint grid_index = tid / 2;
+            uint y = grid_index / GRID_DIM;
+            uint x = grid_index - y * GRID_DIM;
+            uint vertex = (x + y * GRID_DIM_VX);
+
+            if ((tid % 2) == 0)
+            {   
+                // Upper left triangle
+                gl_PrimitiveIndicesNV[grid_index * 6 + 0] = 0 + vertex;
+                gl_PrimitiveIndicesNV[grid_index * 6 + 1] = 1 + vertex;
+                gl_PrimitiveIndicesNV[grid_index * 6 + 2] = GRID_DIM_VX + vertex;
+            }
+            else
+            {
+                // Lower right triangle
+                gl_PrimitiveIndicesNV[grid_index * 6 + 3] = GRID_DIM_VX + vertex;
+                gl_PrimitiveIndicesNV[grid_index * 6 + 4] = 1 + vertex;
+                gl_PrimitiveIndicesNV[grid_index * 6 + 5] = 1 + GRID_DIM_VX + vertex;
+            }
+        }
+    }
+
+    gl_PrimitiveCountNV = NUM_GRID_TRIANGLES;
+}

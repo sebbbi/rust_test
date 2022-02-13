@@ -4,10 +4,12 @@ enum GridTechnique {
     NonIndexed,
     LeadingVertex,
     GetAttributeAtVertex,
+    MeshShader,
 }
 
 const GRID_TECHNIQUE: GridTechnique = GridTechnique::LeadingVertex;
 
+use ash::Instance;
 use std::default::Default;
 use std::ffi::CString;
 use std::io::Cursor;
@@ -38,12 +40,15 @@ pub struct RenderGrids {
     pub descriptor_sets: Vec<vk::DescriptorSet>,
     pub vertex_shader_module: vk::ShaderModule,
     pub fragment_shader_module: vk::ShaderModule,
+    pub mesh_shader: ash::extensions::nv::MeshShader,
+    pub num_instances : usize,
 }
 
 impl RenderGrids {
     #[allow(clippy::too_many_arguments)]
     pub fn new(
         device: &Device,
+        instance: &Instance,
         allocator: &vk_mem::Allocator,
         descriptor_pool: &vk::DescriptorPool,
         render_pass: &vk::RenderPass,
@@ -51,6 +56,8 @@ impl RenderGrids {
         instances_buffer_descriptor: &vk::DescriptorBufferInfo,
         num_instances: usize,
     ) -> RenderGrids {
+        let mesh_shader = ash::extensions::nv::MeshShader::new(instance, device);
+
         let alloc_info_cpu = vk_mem::AllocationCreateInfo {
             usage: vk_mem::MemoryUsage::CpuOnly,
             flags: vk_mem::AllocationCreateFlags::MAPPED,
@@ -134,33 +141,35 @@ impl RenderGrids {
         let uniform_buffer_gpu =
             VkBuffer::new(allocator, &uniform_buffer_gpu_info, &alloc_info_gpu);
 
+        let geom_shader_stage : vk::ShaderStageFlags = if let GridTechnique::MeshShader = GRID_TECHNIQUE { vk::ShaderStageFlags::MESH_NV } else { vk::ShaderStageFlags::VERTEX };
+
         let desc_layout_bindings = [
             vk::DescriptorSetLayoutBinding {
                 binding: 0,
                 descriptor_type: vk::DescriptorType::UNIFORM_BUFFER,
                 descriptor_count: 1,
-                stage_flags: vk::ShaderStageFlags::FRAGMENT | vk::ShaderStageFlags::VERTEX,
+                stage_flags: vk::ShaderStageFlags::FRAGMENT | geom_shader_stage,
                 ..Default::default()
             },
             vk::DescriptorSetLayoutBinding {
                 binding: 1,
                 descriptor_type: vk::DescriptorType::STORAGE_BUFFER,
                 descriptor_count: 1,
-                stage_flags: vk::ShaderStageFlags::FRAGMENT | vk::ShaderStageFlags::VERTEX,
+                stage_flags: vk::ShaderStageFlags::FRAGMENT | geom_shader_stage,
                 ..Default::default()
             },
             vk::DescriptorSetLayoutBinding {
                 binding: 2,
                 descriptor_type: vk::DescriptorType::STORAGE_BUFFER,
                 descriptor_count: 1,
-                stage_flags: vk::ShaderStageFlags::FRAGMENT | vk::ShaderStageFlags::VERTEX,
+                stage_flags: vk::ShaderStageFlags::FRAGMENT | geom_shader_stage,
                 ..Default::default()
             },
             vk::DescriptorSetLayoutBinding {
                 binding: 3,
                 descriptor_type: vk::DescriptorType::COMBINED_IMAGE_SAMPLER,
                 descriptor_count: 1,
-                stage_flags: vk::ShaderStageFlags::FRAGMENT | vk::ShaderStageFlags::VERTEX,
+                stage_flags: vk::ShaderStageFlags::FRAGMENT | geom_shader_stage,
                 ..Default::default()
             },
         ];
@@ -219,6 +228,7 @@ impl RenderGrids {
             GridTechnique::NonIndexed => &include_bytes!("../../../shader/vbuffer_nonindexed_vert.spv")[..],
             GridTechnique::LeadingVertex => &include_bytes!("../../../shader/vbuffer_leadingvertex_vert.spv")[..],
             GridTechnique::GetAttributeAtVertex => &include_bytes!("../../../shader/vbuffer_getattributeatvertex_vert.spv")[..],
+            GridTechnique::MeshShader => &include_bytes!("../../../shader/vbuffer_meshshader_mesh.spv")[..],
         });
 
         let mut frag_spv_file = Cursor::new(match GRID_TECHNIQUE {
@@ -227,6 +237,7 @@ impl RenderGrids {
             GridTechnique::NonIndexed => &include_bytes!("../../../shader/vbuffer_nonindexed_frag.spv")[..],
             GridTechnique::LeadingVertex => &include_bytes!("../../../shader/vbuffer_leadingvertex_frag.spv")[..],
             GridTechnique::GetAttributeAtVertex => &include_bytes!("../../../shader/vbuffer_getattributeatvertex_frag.spv")[..],
+            GridTechnique::MeshShader => &include_bytes!("../../../shader/vbuffer_meshshader_frag.spv")[..],
         });
                             
         let vertex_code =
@@ -250,7 +261,7 @@ impl RenderGrids {
             vk::PipelineShaderStageCreateInfo {
                 module: vertex_shader_module,
                 p_name: shader_entry_name.as_ptr(),
-                stage: vk::ShaderStageFlags::VERTEX,
+                stage: geom_shader_stage,
                 ..Default::default()
             },
             vk::PipelineShaderStageCreateInfo {
@@ -355,6 +366,8 @@ impl RenderGrids {
             descriptor_sets,
             vertex_shader_module,
             fragment_shader_module,
+            mesh_shader,
+            num_instances,
         }
     }
 
@@ -505,6 +518,12 @@ impl RenderGrids {
                             self.index_buffer_gpu.size as u32 / std::mem::size_of::<u32>() as u32,
                             1,
                             0,
+                            0,
+                        ),
+               GridTechnique::MeshShader =>                 
+                    self.mesh_shader.cmd_draw_mesh_tasks(
+                            *command_buffer,
+                            self.num_instances as u32,  // Validation layer message here is a confirmed Nvidia driver bug.
                             0,
                         ),
                 _ => device.cmd_draw_indexed(
