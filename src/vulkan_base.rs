@@ -7,6 +7,9 @@ extern crate winit;
 
 use crate::vulkan_helpers::*;
 
+use gpu_allocator::vulkan::*;
+use gpu_allocator::MemoryLocation;
+
 use ash::extensions::{
     ext::DebugUtils,
     khr::{Surface, Swapchain},
@@ -14,11 +17,12 @@ use ash::extensions::{
 
 use winit::window::Window;
 
-pub use ash::version::{DeviceV1_0, EntryV1_0, InstanceV1_0};
-use ash::{vk, Device, Entry, Instance};
+use ash::{vk, Entry};
+pub use ash::{Device, Instance};
 use std::borrow::Cow;
 use std::default::Default;
 use std::ffi::{CStr, CString};
+use std::mem::ManuallyDrop;
 use std::ops::Drop;
 
 const NUM_COMMAND_BUFFERS: u32 = 3;
@@ -148,20 +152,22 @@ pub struct VulkanBase {
 
     pub command_buffer_pool: CommandBufferPool,
 
-    pub allocator: vk_mem::Allocator,
+    pub allocator: ManuallyDrop<Allocator>,
 }
 
 impl VulkanBase {
     pub fn new(window: &Window, window_width: u32, window_height: u32) -> Self {
         unsafe {
-            let entry = Entry::new().unwrap();
-            let app_name = CString::new("VulkanTriangle").unwrap();
+            let entry = Entry::load().unwrap();
+            let app_name = CString::new("VulkanTest").unwrap();
 
             let layer_names = [CString::new("VK_LAYER_KHRONOS_validation").unwrap()];
             let layers_names_raw: Vec<*const i8> = layer_names
                 .iter()
                 .map(|raw_name| raw_name.as_ptr())
                 .collect();
+
+            //let extension_names_raw = ash_window::enumerate_required_extensions(window).unwrap().to_vec();
 
             let surface_extensions = ash_window::enumerate_required_extensions(window).unwrap();
             let mut extension_names_raw = surface_extensions
@@ -170,14 +176,18 @@ impl VulkanBase {
                 .collect::<Vec<_>>();
 
             extension_names_raw.push(DebugUtils::name().as_ptr());
-            extension_names_raw.push(::std::ffi::CStr::from_bytes_with_nul(b"VK_KHR_get_physical_device_properties2\0").expect("Wrong extension string").as_ptr());
+            extension_names_raw.push(
+                ::std::ffi::CStr::from_bytes_with_nul(b"VK_KHR_get_physical_device_properties2\0")
+                    .expect("Wrong extension string")
+                    .as_ptr(),
+            );
 
             let appinfo = vk::ApplicationInfo::builder()
                 .application_name(&app_name)
                 .application_version(0)
                 .engine_name(&app_name)
                 .engine_version(0)
-                .api_version(vk::make_version(1, 0, 0));
+                .api_version(vk::make_api_version(0, 1, 0, 0));
 
             let create_info = vk::InstanceCreateInfo::builder()
                 .application_info(&appinfo)
@@ -194,7 +204,11 @@ impl VulkanBase {
                         | vk::DebugUtilsMessageSeverityFlagsEXT::WARNING,
                     //| vk::DebugUtilsMessageSeverityFlagsEXT::INFO,
                 )
-                .message_type(vk::DebugUtilsMessageTypeFlagsEXT::all())
+                .message_type(
+                    vk::DebugUtilsMessageTypeFlagsEXT::GENERAL
+                        | vk::DebugUtilsMessageTypeFlagsEXT::VALIDATION
+                        | vk::DebugUtilsMessageTypeFlagsEXT::PERFORMANCE,
+                )
                 .pfn_user_callback(Some(vulkan_debug_callback));
 
             let debug_utils_loader = DebugUtils::new(&entry, &instance);
@@ -208,7 +222,7 @@ impl VulkanBase {
             let surface_loader = Surface::new(&entry, &instance);
             let (pdevice, queue_family_index) = pdevices
                 .iter()
-                .map(|pdevice| {
+                .flat_map(|pdevice| {
                     instance
                         .get_physical_device_queue_family_properties(*pdevice)
                         .iter()
@@ -231,12 +245,14 @@ impl VulkanBase {
                         })
                         .next()
                 })
-                .flatten()
+                //.skip(1)      // Enable to select secondary GPU
                 .next()
                 .expect("Couldn't find suitable device.");
             let queue_family_index = queue_family_index as u32;
 
-            let device_extension_names = [Swapchain::name()/*, &CString::new("VK_NV_mesh_shader").unwrap()*/];
+            let device_extension_names = [
+                Swapchain::name(), /*, &CString::new("VK_NV_mesh_shader").unwrap()*/
+            ];
             let device_extension_names_raw: Vec<*const i8> = device_extension_names
                 .iter()
                 .map(|raw_name| raw_name.as_ptr())
@@ -361,18 +377,14 @@ impl VulkanBase {
                 })
                 .collect();
 
-            let allocator_create_info = vk_mem::AllocatorCreateInfo {
-                physical_device: pdevice,
-                device: device.clone(),
+            let mut allocator = Allocator::new(&AllocatorCreateDesc {
                 instance: instance.clone(),
-                flags: vk_mem::AllocatorCreateFlags::NONE,
-                preferred_large_heap_block_size: 0,
-                frame_in_use_count: 0,
-                heap_size_limits: None,
-            };
-
-            let allocator =
-                vk_mem::Allocator::new(&allocator_create_info).expect("Allocator creation failed");
+                device: device.clone(),
+                physical_device: pdevice,
+                debug_settings: Default::default(),
+                buffer_device_address: false,
+            })
+            .unwrap();
 
             let depth_image_create_info = vk::ImageCreateInfo::builder()
                 .image_type(vk::ImageType::TYPE_2D)
@@ -389,12 +401,12 @@ impl VulkanBase {
                 .usage(vk::ImageUsageFlags::DEPTH_STENCIL_ATTACHMENT | vk::ImageUsageFlags::SAMPLED)
                 .sharing_mode(vk::SharingMode::EXCLUSIVE);
 
-            let alloc_info_gpu = vk_mem::AllocationCreateInfo {
-                usage: vk_mem::MemoryUsage::GpuOnly,
-                ..Default::default()
-            };
-
-            let depth_image = VkImage::new(&allocator, &depth_image_create_info, &alloc_info_gpu);
+            let depth_image = VkImage::new(
+                &device,
+                &mut allocator,
+                &depth_image_create_info,
+                MemoryLocation::GpuOnly,
+            );
 
             let depth_image_view_info = vk::ImageViewCreateInfo::builder()
                 .subresource_range(
@@ -446,7 +458,7 @@ impl VulkanBase {
                 debug_call_back,
                 debug_utils_loader,
                 command_buffer_pool,
-                allocator,
+                allocator: ManuallyDrop::new(allocator),
             };
 
             vk.record_submit_commandbuffer(
@@ -563,7 +575,7 @@ impl Drop for VulkanBase {
             self.command_buffer_pool.destroy(&self.device);
 
             self.device.destroy_image_view(self.depth_image_view, None);
-            self.depth_image.destroy(&self.allocator);
+            self.depth_image.destroy(&self.device, &mut self.allocator);
 
             for &image_view in self.present_image_views.iter() {
                 self.device.destroy_image_view(image_view, None);
@@ -571,7 +583,7 @@ impl Drop for VulkanBase {
             self.swapchain_loader
                 .destroy_swapchain(self.swapchain, None);
 
-            self.allocator.destroy();
+            ManuallyDrop::drop(&mut self.allocator);
 
             self.device.destroy_device(None);
             self.surface_loader.destroy_surface(self.surface, None);

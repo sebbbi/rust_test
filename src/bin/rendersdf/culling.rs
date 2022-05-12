@@ -7,8 +7,10 @@ use ash::util::*;
 use ash::{vk, Device};
 
 use crate::minivector::*;
-use crate::vulkan_base::*;
 use crate::vulkan_helpers::*;
+
+use gpu_allocator::vulkan::*;
+use gpu_allocator::MemoryLocation;
 
 #[derive(Clone, Copy)]
 pub struct VisibilityData {
@@ -46,24 +48,13 @@ pub struct Culling {
 impl Culling {
     pub fn new(
         device: &Device,
-        allocator: &vk_mem::Allocator,
+        allocator: &mut Allocator,
         descriptor_pool: &vk::DescriptorPool,
         depth_pyramid_descriptor: &vk::DescriptorImageInfo,
         depth_pyramid_debug_descriptor: &vk::DescriptorImageInfo,
         instances_buffer_descriptor: &vk::DescriptorBufferInfo,
         num_instances: usize,
     ) -> Culling {
-        let alloc_info_cpu = vk_mem::AllocationCreateInfo {
-            usage: vk_mem::MemoryUsage::CpuOnly,
-            flags: vk_mem::AllocationCreateFlags::MAPPED,
-            ..Default::default()
-        };
-
-        let alloc_info_gpu = vk_mem::AllocationCreateInfo {
-            usage: vk_mem::MemoryUsage::GpuOnly,
-            ..Default::default()
-        };
-
         let visibility_buffer_info = vk::BufferCreateInfo {
             size: (std::mem::size_of::<VisibilityData>() * num_instances) as u64,
             usage: vk::BufferUsageFlags::STORAGE_BUFFER,
@@ -71,7 +62,12 @@ impl Culling {
             ..Default::default()
         };
 
-        let visibility_buffer = VkBuffer::new(allocator, &visibility_buffer_info, &alloc_info_gpu);
+        let visibility_buffer = VkBuffer::new(
+            device,
+            allocator,
+            &visibility_buffer_info,
+            MemoryLocation::CpuToGpu,
+        );
 
         let visibility_buffer_descriptor = vk::DescriptorBufferInfo {
             buffer: visibility_buffer.buffer,
@@ -88,8 +84,12 @@ impl Culling {
             ..Default::default()
         };
 
-        let visibility_arguments =
-            VkBuffer::new(allocator, &visibility_arguments_info, &alloc_info_gpu);
+        let visibility_arguments = VkBuffer::new(
+            device,
+            allocator,
+            &visibility_arguments_info,
+            MemoryLocation::GpuOnly,
+        );
 
         let visibility_arguments_descriptor = vk::DescriptorBufferInfo {
             buffer: visibility_arguments.buffer,
@@ -104,7 +104,12 @@ impl Culling {
             ..Default::default()
         };
 
-        let uniform_buffer = VkBuffer::new(allocator, &uniform_buffer_info, &alloc_info_cpu);
+        let uniform_buffer = VkBuffer::new(
+            device,
+            allocator,
+            &uniform_buffer_info,
+            MemoryLocation::CpuToGpu,
+        );
 
         let uniform_buffer_gpu_info = vk::BufferCreateInfo {
             size: std::mem::size_of::<CullingUniforms>() as u64,
@@ -113,8 +118,12 @@ impl Culling {
             ..Default::default()
         };
 
-        let uniform_buffer_gpu =
-            VkBuffer::new(allocator, &uniform_buffer_gpu_info, &alloc_info_gpu);
+        let uniform_buffer_gpu = VkBuffer::new(
+            device,
+            allocator,
+            &uniform_buffer_gpu_info,
+            MemoryLocation::GpuOnly,
+        );
 
         let desc_layout_bindings = [
             vk::DescriptorSetLayoutBinding {
@@ -474,12 +483,12 @@ impl Culling {
         }
     }
 
-    pub fn destroy(&self, device: &Device, allocator: &vk_mem::Allocator) {
+    pub fn destroy(&mut self, device: &Device, allocator: &mut Allocator) {
         unsafe {
-            self.visibility_arguments.destroy(allocator);
-            self.visibility_buffer.destroy(allocator);
-            self.uniform_buffer.destroy(allocator);
-            self.uniform_buffer_gpu.destroy(allocator);
+            self.visibility_arguments.destroy(device, allocator);
+            self.visibility_buffer.destroy(device, allocator);
+            self.uniform_buffer.destroy(device, allocator);
+            self.uniform_buffer_gpu.destroy(device, allocator);
             device.destroy_pipeline_layout(self.pipeline_layout, None);
             device.destroy_descriptor_set_layout(self.desc_set_layout, None);
             device.destroy_pipeline(self.compute_pipeline, None);

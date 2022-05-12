@@ -7,10 +7,10 @@ edition = "2018"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-ash = "0.31"
-ash-window = "0.5"
-winit = "0.24"
+ash = "0.36.0"
+ash-window = "0.9.0"
+winit = "0.26"
 image = "0.23"
 rand = "0.7.3"
 miniz_oxide = "0.4.3"
-vk-mem = "0.2.0"
+gpu-allocator = "0.17.0"

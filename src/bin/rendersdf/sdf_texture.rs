@@ -1,7 +1,9 @@
 use ash::{vk, Device};
 use std::default::Default;
 
-use crate::vulkan_base::*;
+use gpu_allocator::vulkan::*;
+use gpu_allocator::MemoryLocation;
+
 use crate::vulkan_helpers::*;
 use crate::SdfLevel;
 
@@ -16,21 +18,10 @@ pub struct SdfTexture {
 impl SdfTexture {
     pub fn new(
         device: &Device,
-        allocator: &vk_mem::Allocator,
+        allocator: &mut Allocator,
         sdf_levels: &[SdfLevel],
         sdf_total_voxels: usize,
     ) -> SdfTexture {
-        let alloc_info_cpu = vk_mem::AllocationCreateInfo {
-            usage: vk_mem::MemoryUsage::CpuOnly,
-            flags: vk_mem::AllocationCreateFlags::MAPPED,
-            ..Default::default()
-        };
-
-        let alloc_info_gpu = vk_mem::AllocationCreateInfo {
-            usage: vk_mem::MemoryUsage::GpuOnly,
-            ..Default::default()
-        };
-
         let image_buffer_info = vk::BufferCreateInfo {
             size: (std::mem::size_of::<u16>() * sdf_total_voxels) as u64,
             usage: vk::BufferUsageFlags::TRANSFER_SRC,
@@ -38,7 +29,12 @@ impl SdfTexture {
             ..Default::default()
         };
 
-        let upload_buffer = VkBuffer::new(allocator, &image_buffer_info, &alloc_info_cpu);
+        let upload_buffer = VkBuffer::new(
+            device,
+            allocator,
+            &image_buffer_info,
+            MemoryLocation::CpuToGpu,
+        );
 
         for level in sdf_levels {
             upload_buffer.copy_from_slice(
@@ -66,7 +62,12 @@ impl SdfTexture {
             ..Default::default()
         };
 
-        let image = VkImage::new(allocator, &texture_create_info, &alloc_info_gpu);
+        let image = VkImage::new(
+            device,
+            allocator,
+            &texture_create_info,
+            MemoryLocation::GpuOnly,
+        );
 
         let sampler_info = vk::SamplerCreateInfo {
             mag_filter: vk::Filter::LINEAR,
@@ -207,11 +208,11 @@ impl SdfTexture {
         };
     }
 
-    pub fn destroy(&self, device: &Device, allocator: &vk_mem::Allocator) {
+    pub fn destroy(&mut self, device: &Device, allocator: &mut Allocator) {
         unsafe {
             device.destroy_image_view(self.view, None);
-            self.image.destroy(allocator);
-            self.upload_buffer.destroy(allocator);
+            self.image.destroy(device, allocator);
+            self.upload_buffer.destroy(device, allocator);
             device.destroy_sampler(self.sampler, None);
         }
     }

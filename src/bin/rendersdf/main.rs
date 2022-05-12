@@ -103,7 +103,7 @@ fn main() {
         .unwrap();
 
     // Vulkan base initialization
-    let base = VulkanBase::new(&window, window_width, window_height);
+    let mut base = VulkanBase::new(&window, window_width, window_height);
 
     // Render passes
     let render_pass_attachments = [
@@ -224,31 +224,31 @@ fn main() {
     .unwrap();
 
     // SDF volume texture
-    let sdf_texture = SdfTexture::new(
+    let mut sdf_texture = SdfTexture::new(
         &base.device,
-        &base.allocator,
+        &mut base.allocator,
         &sdf_levels,
         sdf_total_voxels as usize,
     );
 
     // Cube instances
-    let instances = Instances::new(&base.device, &base.allocator, diagonal_length);
+    let mut instances = Instances::new(&base.device, &mut base.allocator, diagonal_length);
 
     // Occlusion culling (depth pyramid)
     let pyramid_dimension = 512;
     let pyramid_mips = 7;
     let pyramid_texture_dimensions = (pyramid_dimension * 3 / 2, pyramid_dimension);
-    let depth_pyramid = DepthPyramid::new(
+    let mut depth_pyramid = DepthPyramid::new(
         &base.device,
-        &base.allocator,
+        &mut base.allocator,
         &descriptor_pool,
         &base.depth_image_view,
         pyramid_texture_dimensions,
     );
 
-    let culling = Culling::new(
+    let mut culling = Culling::new(
         &base.device,
-        &base.allocator,
+        &mut base.allocator,
         &descriptor_pool,
         &depth_pyramid.descriptor_sample,
         &depth_pyramid.descriptor_debug_sample,
@@ -256,9 +256,9 @@ fn main() {
         NUM_INSTANCES,
     );
 
-    let culling_debug = CullingDebug::new(
+    let mut culling_debug = CullingDebug::new(
         &base.device,
-        &base.allocator,
+        &mut base.allocator,
         &descriptor_pool,
         &render_pass,
         &view_scissor,
@@ -266,9 +266,9 @@ fn main() {
     );
 
     // Cube renderer
-    let render_cubes = RenderCubes::new(
+    let mut render_cubes = RenderCubes::new(
         &base.device,
-        &base.allocator,
+        &mut base.allocator,
         &descriptor_pool,
         &render_pass,
         &view_scissor,
@@ -630,12 +630,12 @@ fn main() {
     unsafe { base.device.device_wait_idle() }.unwrap();
 
     // Cleanup
-    culling_debug.destroy(&base.device, &base.allocator);
-    culling.destroy(&base.device, &base.allocator);
-    instances.destroy(&base.device, &base.allocator);
-    render_cubes.destroy(&base.device, &base.allocator);
-    sdf_texture.destroy(&base.device, &base.allocator);
-    depth_pyramid.destroy(&base.device, &base.allocator);
+    culling_debug.destroy(&base.device, &mut base.allocator);
+    culling.destroy(&base.device, &mut base.allocator);
+    instances.destroy(&base.device, &mut base.allocator);
+    render_cubes.destroy(&base.device, &mut base.allocator);
+    sdf_texture.destroy(&base.device, &mut base.allocator);
+    depth_pyramid.destroy(&base.device, &mut base.allocator);
     unsafe {
         base.device.destroy_descriptor_pool(descriptor_pool, None);
         for framebuffer in framebuffers {

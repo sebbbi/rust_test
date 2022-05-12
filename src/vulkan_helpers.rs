@@ -1,58 +1,71 @@
 extern crate ash;
-extern crate vk_mem;
+extern crate gpu_allocator;
 
-pub use ash::version::{DeviceV1_0, EntryV1_0, InstanceV1_0};
 use ash::vk;
+pub use ash::{Device, Instance};
+use gpu_allocator::vulkan::*;
+use gpu_allocator::MemoryLocation;
 use std::ptr;
 use std::slice::{from_raw_parts, from_raw_parts_mut};
-use vk_mem::{Allocator, MemoryUsage};
 
 pub struct VkBuffer {
     pub buffer: vk::Buffer,
-    pub allocation: vk_mem::Allocation,
-    pub info: vk_mem::AllocationInfo,
+    pub allocation: Option<Allocation>,
     pub size: u64,
     pub mapped_ptr: *mut u8,
 }
 
 impl VkBuffer {
     pub fn new(
-        allocator: &vk_mem::Allocator,
+        device: &Device,
+        allocator: &mut Allocator,
         buffer_info: &vk::BufferCreateInfo,
-        allocation_info: &vk_mem::AllocationCreateInfo,
+        location: MemoryLocation,
     ) -> VkBuffer {
         let size = buffer_info.size;
 
-        let (buffer, allocation, info) = allocator
-            .create_buffer(buffer_info, allocation_info)
-            .expect("Buffer creation failed");
+        let buffer = unsafe { device.create_buffer(buffer_info, None) }.unwrap();
+        let requirements = unsafe { device.get_buffer_memory_requirements(buffer) };
 
-        let mapped_ptr = if allocation_info.usage == MemoryUsage::GpuOnly {
+        let allocation = allocator
+            .allocate(&AllocationCreateDesc {
+                name: "buffer",
+                requirements,
+                location,
+                linear: true,
+            })
+            .unwrap();
+
+        unsafe {
+            device
+                .bind_buffer_memory(buffer, allocation.memory(), allocation.offset())
+                .unwrap()
+        };
+
+        let mapped_ptr = if location == MemoryLocation::GpuOnly {
             ptr::null_mut()
         } else {
-            info.get_mapped_data()
+            allocation.mapped_ptr().unwrap().as_ptr() as *mut u8
         };
 
         VkBuffer {
             buffer,
-            allocation,
-            info,
+            allocation: Some(allocation),
             size,
             mapped_ptr,
         }
     }
 
-    pub fn destroy(&self, allocator: &Allocator) {
-        allocator
-            .destroy_buffer(self.buffer, &self.allocation)
-            .expect("Buffer destroy failed");
+    pub fn destroy(&mut self, device: &Device, allocator: &mut Allocator) {
+        allocator.free(self.allocation.take().unwrap()).unwrap();
+        unsafe { device.destroy_buffer(self.buffer, None) };
     }
 
     pub fn copy_from_slice<T>(&self, slice: &[T], offset: usize)
     where
         T: Copy,
     {
-        assert!(std::mem::size_of_val(slice) + offset <= self.info.get_size());
+        //assert!(std::mem::size_of_val(slice) + offset <= self.info.get_size());
         assert!(!self.mapped_ptr.is_null());
 
         unsafe {
@@ -65,30 +78,54 @@ impl VkBuffer {
 
 pub struct VkImage {
     pub image: vk::Image,
-    pub allocation: vk_mem::Allocation,
-    pub info: vk_mem::AllocationInfo,
+    pub allocation: Option<Allocation>,
 }
 
 impl VkImage {
     pub fn new(
-        allocator: &vk_mem::Allocator,
+        device: &Device,
+        allocator: &mut Allocator,
         image_info: &vk::ImageCreateInfo,
-        allocation_info: &vk_mem::AllocationCreateInfo,
+        location: MemoryLocation,
     ) -> VkImage {
-        let (image, allocation, info) = allocator
-            .create_image(image_info, allocation_info)
-            .expect("Image creation failed");
+        let image = unsafe { device.create_image(image_info, None) }.unwrap();
+        let requirements = unsafe { device.get_image_memory_requirements(image) };
+
+        let mut allocation = allocator.allocate(&AllocationCreateDesc {
+            name: "image",
+            requirements,
+            location,
+            linear: false,
+        });
+
+        // Workaround for gpu_allocator DEVICE_LOCAL memory running out on iGPUs
+        // TODO: Remove once gpu_allocator handles iGPUs properly!
+        if allocation.is_err() {
+            allocation = allocator.allocate(&AllocationCreateDesc {
+                name: "image",
+                requirements,
+                location: MemoryLocation::CpuToGpu,
+                linear: false,
+            });
+        };
+
+        let allocation = allocation.unwrap();
+
+        unsafe {
+            device
+                .bind_image_memory(image, allocation.memory(), allocation.offset())
+                .unwrap()
+        };
+
         VkImage {
             image,
-            allocation,
-            info,
+            allocation: Some(allocation),
         }
     }
 
-    pub fn destroy(&self, allocator: &Allocator) {
-        allocator
-            .destroy_image(self.image, &self.allocation)
-            .expect("Image destroy failed");
+    pub fn destroy(&mut self, device: &Device, allocator: &mut Allocator) {
+        allocator.free(self.allocation.take().unwrap()).unwrap();
+        unsafe { device.destroy_image(self.image, None) };
     }
 }
 

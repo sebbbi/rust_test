@@ -6,7 +6,9 @@ use std::mem;
 use ash::util::*;
 use ash::{vk, Device};
 
-use crate::vulkan_base::*;
+use gpu_allocator::vulkan::*;
+use gpu_allocator::MemoryLocation;
+
 use crate::vulkan_helpers::*;
 
 #[derive(Clone, Copy)]
@@ -46,22 +48,11 @@ pub struct DepthPyramid {
 impl DepthPyramid {
     pub fn new(
         device: &Device,
-        allocator: &vk_mem::Allocator,
+        allocator: &mut Allocator,
         descriptor_pool: &vk::DescriptorPool,
         depth_view: &vk::ImageView,
         image_dimensions: (u32, u32),
     ) -> DepthPyramid {
-        let alloc_info_cpu = vk_mem::AllocationCreateInfo {
-            usage: vk_mem::MemoryUsage::CpuOnly,
-            flags: vk_mem::AllocationCreateFlags::MAPPED,
-            ..Default::default()
-        };
-
-        let alloc_info_gpu = vk_mem::AllocationCreateInfo {
-            usage: vk_mem::MemoryUsage::GpuOnly,
-            ..Default::default()
-        };
-
         let uniform_buffer_info = vk::BufferCreateInfo {
             size: std::mem::size_of::<DepthPyramidUniforms>() as u64,
             usage: vk::BufferUsageFlags::TRANSFER_SRC,
@@ -69,7 +60,12 @@ impl DepthPyramid {
             ..Default::default()
         };
 
-        let uniform_buffer = VkBuffer::new(allocator, &uniform_buffer_info, &alloc_info_cpu);
+        let uniform_buffer = VkBuffer::new(
+            device,
+            allocator,
+            &uniform_buffer_info,
+            MemoryLocation::CpuToGpu,
+        );
 
         let uniform_buffer_gpu_info = vk::BufferCreateInfo {
             size: std::mem::size_of::<DepthPyramidUniforms>() as u64,
@@ -78,8 +74,12 @@ impl DepthPyramid {
             ..Default::default()
         };
 
-        let uniform_buffer_gpu =
-            VkBuffer::new(allocator, &uniform_buffer_gpu_info, &alloc_info_gpu);
+        let uniform_buffer_gpu = VkBuffer::new(
+            device,
+            allocator,
+            &uniform_buffer_gpu_info,
+            MemoryLocation::GpuOnly,
+        );
 
         let image_create_info = vk::ImageCreateInfo {
             image_type: vk::ImageType::TYPE_2D,
@@ -98,7 +98,12 @@ impl DepthPyramid {
             ..Default::default()
         };
 
-        let image = VkImage::new(allocator, &image_create_info, &alloc_info_gpu);
+        let image = VkImage::new(
+            device,
+            allocator,
+            &image_create_info,
+            MemoryLocation::GpuOnly,
+        );
 
         let image_debug_create_info = vk::ImageCreateInfo {
             image_type: vk::ImageType::TYPE_2D,
@@ -119,7 +124,12 @@ impl DepthPyramid {
             ..Default::default()
         };
 
-        let image_debug = VkImage::new(allocator, &image_debug_create_info, &alloc_info_gpu);
+        let image_debug = VkImage::new(
+            device,
+            allocator,
+            &image_debug_create_info,
+            MemoryLocation::GpuOnly,
+        );
 
         let group_dim = (8, 8);
 
@@ -140,7 +150,12 @@ impl DepthPyramid {
             ..Default::default()
         };
 
-        let image_counters = VkImage::new(allocator, &image_counters_create_info, &alloc_info_gpu);
+        let image_counters = VkImage::new(
+            device,
+            allocator,
+            &image_counters_create_info,
+            MemoryLocation::GpuOnly,
+        );
 
         let sampler_info = vk::SamplerCreateInfo {
             mag_filter: vk::Filter::LINEAR,
@@ -703,16 +718,16 @@ impl DepthPyramid {
         }
     }
 
-    pub fn destroy(&self, device: &Device, allocator: &vk_mem::Allocator) {
+    pub fn destroy(&mut self, device: &Device, allocator: &mut Allocator) {
         unsafe {
             device.destroy_image_view(self.view, None);
             device.destroy_image_view(self.view_debug, None);
             device.destroy_image_view(self.view_counters, None);
-            self.image.destroy(allocator);
-            self.image_debug.destroy(allocator);
-            self.image_counters.destroy(allocator);
-            self.uniform_buffer.destroy(allocator);
-            self.uniform_buffer_gpu.destroy(allocator);
+            self.image.destroy(device, allocator);
+            self.image_debug.destroy(device, allocator);
+            self.image_counters.destroy(device, allocator);
+            self.uniform_buffer.destroy(device, allocator);
+            self.uniform_buffer_gpu.destroy(device, allocator);
             device.destroy_sampler(self.sampler, None);
             device.destroy_pipeline_layout(self.pipeline_layout, None);
             device.destroy_descriptor_set_layout(self.desc_set_layout, None);

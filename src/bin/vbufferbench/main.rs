@@ -62,7 +62,7 @@ fn main() {
         .unwrap();
 
     // Vulkan base initialization
-    let base = VulkanBase::new(&window, window_width, window_height);
+    let mut base = VulkanBase::new(&window, window_width, window_height);
 
     // Render passes
     let render_pass_attachments = [
@@ -183,13 +183,13 @@ fn main() {
     .unwrap();
 
     // Grid instances
-    let instances = Instances::new(&base.device, &base.allocator, diagonal_length);
+    let mut instances = Instances::new(&base.device, &mut base.allocator, diagonal_length);
 
     // Grid renderer
-    let render_grids = RenderGrids::new(
+    let mut render_grids = RenderGrids::new(
         &base.device,
         &base.instance,
-        &base.allocator,
+        &mut base.allocator,
         &descriptor_pool,
         &render_pass,
         &view_scissor,
@@ -500,8 +500,8 @@ fn main() {
     unsafe { base.device.device_wait_idle() }.unwrap();
 
     // Cleanup
-    instances.destroy(&base.device, &base.allocator);
-    render_grids.destroy(&base.device, &base.allocator);
+    instances.destroy(&base.device, &mut base.allocator);
+    render_grids.destroy(&base.device, &mut base.allocator);
     unsafe {
         base.device.destroy_descriptor_pool(descriptor_pool, None);
         for framebuffer in framebuffers {

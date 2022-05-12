@@ -9,8 +9,10 @@ use std::mem;
 use ash::util::*;
 use ash::{vk, Device};
 
+use gpu_allocator::vulkan::*;
+use gpu_allocator::MemoryLocation;
+
 use crate::minivector::*;
-use crate::vulkan_base::*;
 use crate::vulkan_helpers::*;
 
 #[derive(Clone, Copy)]
@@ -40,7 +42,7 @@ impl RenderCubes {
     #[allow(clippy::too_many_arguments)]
     pub fn new(
         device: &Device,
-        allocator: &vk_mem::Allocator,
+        allocator: &mut Allocator,
         descriptor_pool: &vk::DescriptorPool,
         render_pass: &vk::RenderPass,
         view_scissor: &VkViewScissor,
@@ -49,17 +51,6 @@ impl RenderCubes {
         visibility_buffer_descriptor: &vk::DescriptorBufferInfo,
         num_instances: usize,
     ) -> RenderCubes {
-        let alloc_info_cpu = vk_mem::AllocationCreateInfo {
-            usage: vk_mem::MemoryUsage::CpuOnly,
-            flags: vk_mem::AllocationCreateFlags::MAPPED,
-            ..Default::default()
-        };
-
-        let alloc_info_gpu = vk_mem::AllocationCreateInfo {
-            usage: vk_mem::MemoryUsage::GpuOnly,
-            ..Default::default()
-        };
-
         const NUM_CUBE_INDICES: usize = if CUBE_BACKFACE_OPTIMIZATION {
             3 * 3 * 2
         } else {
@@ -94,7 +85,12 @@ impl RenderCubes {
             ..Default::default()
         };
 
-        let index_buffer = VkBuffer::new(allocator, &index_buffer_info, &alloc_info_cpu);
+        let index_buffer = VkBuffer::new(
+            device,
+            allocator,
+            &index_buffer_info,
+            MemoryLocation::CpuToGpu,
+        );
         index_buffer.copy_from_slice(&index_buffer_data[..], 0);
 
         let index_buffer_gpu_info = vk::BufferCreateInfo {
@@ -104,7 +100,12 @@ impl RenderCubes {
             ..Default::default()
         };
 
-        let index_buffer_gpu = VkBuffer::new(allocator, &index_buffer_gpu_info, &alloc_info_gpu);
+        let index_buffer_gpu = VkBuffer::new(
+            device,
+            allocator,
+            &index_buffer_gpu_info,
+            MemoryLocation::GpuOnly,
+        );
 
         let uniform_buffer_info = vk::BufferCreateInfo {
             size: std::mem::size_of::<CubeUniforms>() as u64,
@@ -113,7 +114,12 @@ impl RenderCubes {
             ..Default::default()
         };
 
-        let uniform_buffer = VkBuffer::new(allocator, &uniform_buffer_info, &alloc_info_cpu);
+        let uniform_buffer = VkBuffer::new(
+            device,
+            allocator,
+            &uniform_buffer_info,
+            MemoryLocation::CpuToGpu,
+        );
 
         let uniform_buffer_gpu_info = vk::BufferCreateInfo {
             size: std::mem::size_of::<CubeUniforms>() as u64,
@@ -122,8 +128,12 @@ impl RenderCubes {
             ..Default::default()
         };
 
-        let uniform_buffer_gpu =
-            VkBuffer::new(allocator, &uniform_buffer_gpu_info, &alloc_info_gpu);
+        let uniform_buffer_gpu = VkBuffer::new(
+            device,
+            allocator,
+            &uniform_buffer_gpu_info,
+            MemoryLocation::GpuOnly,
+        );
 
         let desc_layout_bindings = [
             vk::DescriptorSetLayoutBinding {
@@ -312,7 +322,7 @@ impl RenderCubes {
             src_alpha_blend_factor: vk::BlendFactor::ZERO,
             dst_alpha_blend_factor: vk::BlendFactor::ZERO,
             alpha_blend_op: vk::BlendOp::ADD,
-            color_write_mask: vk::ColorComponentFlags::all(),
+            color_write_mask: vk::ColorComponentFlags::RGBA,
         }];
         let color_blend_state = vk::PipelineColorBlendStateCreateInfo::builder()
             .logic_op(vk::LogicOp::CLEAR)
@@ -519,16 +529,16 @@ impl RenderCubes {
         }
     }
 
-    pub fn destroy(&self, device: &Device, allocator: &vk_mem::Allocator) {
+    pub fn destroy(&mut self, device: &Device, allocator: &mut Allocator) {
         unsafe {
             device.destroy_pipeline(self.graphic_pipeline, None);
             device.destroy_pipeline_layout(self.pipeline_layout, None);
             device.destroy_shader_module(self.vertex_shader_module, None);
             device.destroy_shader_module(self.fragment_shader_module, None);
-            self.index_buffer.destroy(allocator);
-            self.index_buffer_gpu.destroy(allocator);
-            self.uniform_buffer.destroy(allocator);
-            self.uniform_buffer_gpu.destroy(allocator);
+            self.index_buffer.destroy(device, allocator);
+            self.index_buffer_gpu.destroy(device, allocator);
+            self.uniform_buffer.destroy(device, allocator);
+            self.uniform_buffer_gpu.destroy(device, allocator);
             device.destroy_descriptor_set_layout(self.desc_set_layout, None);
         }
     }

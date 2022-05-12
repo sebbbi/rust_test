@@ -7,6 +7,9 @@ use std::default::Default;
 
 use ash::{vk, Device};
 
+use gpu_allocator::vulkan::*;
+use gpu_allocator::MemoryLocation;
+
 use crate::minivector::*;
 use crate::vulkan_helpers::*;
 
@@ -21,13 +24,7 @@ pub struct Instances {
 }
 
 impl Instances {
-    pub fn new(_device: &Device, allocator: &vk_mem::Allocator, instance_radius: f32) -> Instances {
-        let alloc_info_cpu_to_gpu = vk_mem::AllocationCreateInfo {
-            usage: vk_mem::MemoryUsage::CpuToGpu,
-            flags: vk_mem::AllocationCreateFlags::MAPPED,
-            ..Default::default()
-        };
-
+    pub fn new(device: &Device, allocator: &mut Allocator, instance_radius: f32) -> Instances {
         let instances_buffer_info = vk::BufferCreateInfo {
             size: (std::mem::size_of::<InstanceData>() * NUM_INSTANCES) as u64,
             usage: vk::BufferUsageFlags::STORAGE_BUFFER,
@@ -35,8 +32,12 @@ impl Instances {
             ..Default::default()
         };
 
-        let instances_buffer =
-            VkBuffer::new(allocator, &instances_buffer_info, &alloc_info_cpu_to_gpu);
+        let instances_buffer = VkBuffer::new(
+            device,
+            allocator,
+            &instances_buffer_info,
+            MemoryLocation::CpuToGpu,
+        );
 
         let instances_buffer_descriptor = vk::DescriptorBufferInfo {
             buffer: instances_buffer.buffer,
@@ -69,7 +70,7 @@ impl Instances {
         }
     }
 
-    pub fn destroy(&self, _device: &Device, allocator: &vk_mem::Allocator) {
-        self.instances_buffer.destroy(allocator);
+    pub fn destroy(&mut self, device: &Device, allocator: &mut Allocator) {
+        self.instances_buffer.destroy(device, allocator);
     }
 }

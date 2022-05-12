@@ -18,8 +18,10 @@ use std::mem;
 use ash::util::*;
 use ash::{vk, Device};
 
+use gpu_allocator::vulkan::*;
+use gpu_allocator::MemoryLocation;
+
 use crate::minivector::*;
-use crate::vulkan_base::*;
 use crate::vulkan_helpers::*;
 
 #[derive(Clone, Copy)]
@@ -41,7 +43,7 @@ pub struct RenderGrids {
     pub vertex_shader_module: vk::ShaderModule,
     pub fragment_shader_module: vk::ShaderModule,
     pub mesh_shader: ash::extensions::nv::MeshShader,
-    pub num_instances : usize,
+    pub num_instances: usize,
 }
 
 impl RenderGrids {
@@ -49,7 +51,7 @@ impl RenderGrids {
     pub fn new(
         device: &Device,
         instance: &Instance,
-        allocator: &vk_mem::Allocator,
+        allocator: &mut Allocator,
         descriptor_pool: &vk::DescriptorPool,
         render_pass: &vk::RenderPass,
         view_scissor: &VkViewScissor,
@@ -58,22 +60,19 @@ impl RenderGrids {
     ) -> RenderGrids {
         let mesh_shader = ash::extensions::nv::MeshShader::new(instance, device);
 
-        let alloc_info_cpu = vk_mem::AllocationCreateInfo {
-            usage: vk_mem::MemoryUsage::CpuOnly,
-            flags: vk_mem::AllocationCreateFlags::MAPPED,
-            ..Default::default()
-        };
-
-        let alloc_info_gpu = vk_mem::AllocationCreateInfo {
-            usage: vk_mem::MemoryUsage::GpuOnly,
-            ..Default::default()
-        };
-
         const GRID_DIM: usize = 7;
         const NUM_GRID_INDICES: usize = GRID_DIM * GRID_DIM * 2 * 3;
 
-        let grid_stride = if let GridTechnique::LeadingVertex = GRID_TECHNIQUE { (GRID_DIM + 1) * 2 } else { GRID_DIM + 1 };
-        let instance_stride = if let GridTechnique::LeadingVertex = GRID_TECHNIQUE { GRID_DIM * (GRID_DIM + 1) * 2 } else { (GRID_DIM + 1) * (GRID_DIM + 1) };
+        let grid_stride = if let GridTechnique::LeadingVertex = GRID_TECHNIQUE {
+            (GRID_DIM + 1) * 2
+        } else {
+            GRID_DIM + 1
+        };
+        let instance_stride = if let GridTechnique::LeadingVertex = GRID_TECHNIQUE {
+            GRID_DIM * (GRID_DIM + 1) * 2
+        } else {
+            (GRID_DIM + 1) * (GRID_DIM + 1)
+        };
 
         let mut grid_indices: [u32; NUM_GRID_INDICES] = [0; NUM_GRID_INDICES];
         for y in 0..GRID_DIM {
@@ -82,7 +81,7 @@ impl RenderGrids {
                 let vertex = (x + y * grid_stride) as u32;
 
                 // Upper left triangle
-                grid_indices[grid * 6 + 0] = 0 + vertex;
+                grid_indices[grid * 6] = vertex;
                 grid_indices[grid * 6 + 1] = 1 + vertex;
                 grid_indices[grid * 6 + 2] = (GRID_DIM + 1) as u32 + vertex;
 
@@ -110,7 +109,12 @@ impl RenderGrids {
             ..Default::default()
         };
 
-        let index_buffer = VkBuffer::new(allocator, &index_buffer_info, &alloc_info_cpu);
+        let index_buffer = VkBuffer::new(
+            device,
+            allocator,
+            &index_buffer_info,
+            MemoryLocation::CpuToGpu,
+        );
         index_buffer.copy_from_slice(&index_buffer_data[..], 0);
 
         let index_buffer_gpu_info = vk::BufferCreateInfo {
@@ -120,7 +124,12 @@ impl RenderGrids {
             ..Default::default()
         };
 
-        let index_buffer_gpu = VkBuffer::new(allocator, &index_buffer_gpu_info, &alloc_info_gpu);
+        let index_buffer_gpu = VkBuffer::new(
+            device,
+            allocator,
+            &index_buffer_gpu_info,
+            MemoryLocation::GpuOnly,
+        );
 
         let uniform_buffer_info = vk::BufferCreateInfo {
             size: std::mem::size_of::<GridUniforms>() as u64,
@@ -129,7 +138,12 @@ impl RenderGrids {
             ..Default::default()
         };
 
-        let uniform_buffer = VkBuffer::new(allocator, &uniform_buffer_info, &alloc_info_cpu);
+        let uniform_buffer = VkBuffer::new(
+            device,
+            allocator,
+            &uniform_buffer_info,
+            MemoryLocation::CpuToGpu,
+        );
 
         let uniform_buffer_gpu_info = vk::BufferCreateInfo {
             size: std::mem::size_of::<GridUniforms>() as u64,
@@ -138,10 +152,19 @@ impl RenderGrids {
             ..Default::default()
         };
 
-        let uniform_buffer_gpu =
-            VkBuffer::new(allocator, &uniform_buffer_gpu_info, &alloc_info_gpu);
+        let uniform_buffer_gpu = VkBuffer::new(
+            device,
+            allocator,
+            &uniform_buffer_gpu_info,
+            MemoryLocation::GpuOnly,
+        );
 
-        let geom_shader_stage : vk::ShaderStageFlags = if let GridTechnique::MeshShader = GRID_TECHNIQUE { vk::ShaderStageFlags::MESH_NV } else { vk::ShaderStageFlags::VERTEX };
+        let geom_shader_stage: vk::ShaderStageFlags =
+            if let GridTechnique::MeshShader = GRID_TECHNIQUE {
+                vk::ShaderStageFlags::MESH_NV
+            } else {
+                vk::ShaderStageFlags::VERTEX
+            };
 
         let desc_layout_bindings = [
             vk::DescriptorSetLayoutBinding {
@@ -221,25 +244,40 @@ impl RenderGrids {
         let pipeline_layout =
             unsafe { device.create_pipeline_layout(&layout_create_info, None) }.unwrap();
 
-
         let mut vertex_spv_file = Cursor::new(match GRID_TECHNIQUE {
             GridTechnique::Color => &include_bytes!("../../../shader/vbuffer_vert.spv")[..],
             GridTechnique::PrimId => &include_bytes!("../../../shader/vbuffer_vert.spv")[..],
-            GridTechnique::NonIndexed => &include_bytes!("../../../shader/vbuffer_nonindexed_vert.spv")[..],
-            GridTechnique::LeadingVertex => &include_bytes!("../../../shader/vbuffer_leadingvertex_vert.spv")[..],
-            GridTechnique::GetAttributeAtVertex => &include_bytes!("../../../shader/vbuffer_getattributeatvertex_vert.spv")[..],
-            GridTechnique::MeshShader => &include_bytes!("../../../shader/vbuffer_meshshader_mesh.spv")[..],
+            GridTechnique::NonIndexed => {
+                &include_bytes!("../../../shader/vbuffer_nonindexed_vert.spv")[..]
+            }
+            GridTechnique::LeadingVertex => {
+                &include_bytes!("../../../shader/vbuffer_leadingvertex_vert.spv")[..]
+            }
+            GridTechnique::GetAttributeAtVertex => {
+                &include_bytes!("../../../shader/vbuffer_getattributeatvertex_vert.spv")[..]
+            }
+            GridTechnique::MeshShader => {
+                &include_bytes!("../../../shader/vbuffer_meshshader_mesh.spv")[..]
+            }
         });
 
         let mut frag_spv_file = Cursor::new(match GRID_TECHNIQUE {
             GridTechnique::Color => &include_bytes!("../../../shader/vbuffer_color_frag.spv")[..],
             GridTechnique::PrimId => &include_bytes!("../../../shader/vbuffer_primid_frag.spv")[..],
-            GridTechnique::NonIndexed => &include_bytes!("../../../shader/vbuffer_nonindexed_frag.spv")[..],
-            GridTechnique::LeadingVertex => &include_bytes!("../../../shader/vbuffer_leadingvertex_frag.spv")[..],
-            GridTechnique::GetAttributeAtVertex => &include_bytes!("../../../shader/vbuffer_getattributeatvertex_frag.spv")[..],
-            GridTechnique::MeshShader => &include_bytes!("../../../shader/vbuffer_meshshader_frag.spv")[..],
+            GridTechnique::NonIndexed => {
+                &include_bytes!("../../../shader/vbuffer_nonindexed_frag.spv")[..]
+            }
+            GridTechnique::LeadingVertex => {
+                &include_bytes!("../../../shader/vbuffer_leadingvertex_frag.spv")[..]
+            }
+            GridTechnique::GetAttributeAtVertex => {
+                &include_bytes!("../../../shader/vbuffer_getattributeatvertex_frag.spv")[..]
+            }
+            GridTechnique::MeshShader => {
+                &include_bytes!("../../../shader/vbuffer_meshshader_frag.spv")[..]
+            }
         });
-                            
+
         let vertex_code =
             read_spv(&mut vertex_spv_file).expect("Failed to read vertex shader spv file");
         let vertex_shader_info = vk::ShaderModuleCreateInfo::builder().code(&vertex_code);
@@ -321,7 +359,7 @@ impl RenderGrids {
             src_alpha_blend_factor: vk::BlendFactor::ZERO,
             dst_alpha_blend_factor: vk::BlendFactor::ZERO,
             alpha_blend_op: vk::BlendOp::ADD,
-            color_write_mask: vk::ColorComponentFlags::all(),
+            color_write_mask: vk::ColorComponentFlags::RGBA,
         }];
         let color_blend_state = vk::PipelineColorBlendStateCreateInfo::builder()
             .logic_op(vk::LogicOp::CLEAR)
@@ -483,11 +521,7 @@ impl RenderGrids {
         }
     }
 
-    pub fn gpu_draw_main_render_pass(
-        &self,
-        device: &Device,
-        command_buffer: &vk::CommandBuffer,
-    ) {
+    pub fn gpu_draw_main_render_pass(&self, device: &Device, command_buffer: &vk::CommandBuffer) {
         unsafe {
             device.cmd_bind_descriptor_sets(
                 *command_buffer,
@@ -512,20 +546,18 @@ impl RenderGrids {
             );
 
             match GRID_TECHNIQUE {
-                GridTechnique::NonIndexed =>                 
-                    device.cmd_draw(
-                            *command_buffer,
-                            self.index_buffer_gpu.size as u32 / std::mem::size_of::<u32>() as u32,
-                            1,
-                            0,
-                            0,
-                        ),
-               GridTechnique::MeshShader =>                 
-                    self.mesh_shader.cmd_draw_mesh_tasks(
-                            *command_buffer,
-                            self.num_instances as u32,  // Validation layer message here is a confirmed Nvidia driver bug.
-                            0,
-                        ),
+                GridTechnique::NonIndexed => device.cmd_draw(
+                    *command_buffer,
+                    self.index_buffer_gpu.size as u32 / std::mem::size_of::<u32>() as u32,
+                    1,
+                    0,
+                    0,
+                ),
+                GridTechnique::MeshShader => self.mesh_shader.cmd_draw_mesh_tasks(
+                    *command_buffer,
+                    self.num_instances as u32, // Validation layer message here is a confirmed Nvidia driver bug.
+                    0,
+                ),
                 _ => device.cmd_draw_indexed(
                     *command_buffer,
                     self.index_buffer_gpu.size as u32 / std::mem::size_of::<u32>() as u32,
@@ -533,21 +565,21 @@ impl RenderGrids {
                     0,
                     0,
                     0,
-                )
+                ),
             }
         }
     }
 
-    pub fn destroy(&self, device: &Device, allocator: &vk_mem::Allocator) {
+    pub fn destroy(&mut self, device: &Device, allocator: &mut Allocator) {
         unsafe {
             device.destroy_pipeline(self.graphic_pipeline, None);
             device.destroy_pipeline_layout(self.pipeline_layout, None);
             device.destroy_shader_module(self.vertex_shader_module, None);
             device.destroy_shader_module(self.fragment_shader_module, None);
-            self.index_buffer.destroy(allocator);
-            self.index_buffer_gpu.destroy(allocator);
-            self.uniform_buffer.destroy(allocator);
-            self.uniform_buffer_gpu.destroy(allocator);
+            self.index_buffer.destroy(device, allocator);
+            self.index_buffer_gpu.destroy(device, allocator);
+            self.uniform_buffer.destroy(device, allocator);
+            self.uniform_buffer_gpu.destroy(device, allocator);
             device.destroy_descriptor_set_layout(self.desc_set_layout, None);
         }
     }
