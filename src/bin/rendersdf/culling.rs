@@ -286,7 +286,7 @@ impl Culling {
 
         let compute_pipeline = compute_pipelines[0];
 
-        Culling { 
+        Culling {
             pipeline_layout,
             uniform_buffer,
             uniform_buffer_gpu,
@@ -350,7 +350,7 @@ impl Culling {
             size: buffer_copy_regions.size,
             ..Default::default()
         };
-       
+
         let arguments_barrier_clear = vk::BufferMemoryBarrier {
             //src_access_mask: vk::AccessFlags::INDIRECT_COMMAND_READ,
             dst_access_mask: vk::AccessFlags::TRANSFER_WRITE,
@@ -358,7 +358,7 @@ impl Culling {
             offset: 0,
             size: std::mem::size_of::<DrawIndexedIndirectArguments>() as u64,
             ..Default::default()
-        };        
+        };
 
         let arguments_barrier_compute = vk::BufferMemoryBarrier {
             src_access_mask: vk::AccessFlags::TRANSFER_WRITE,
