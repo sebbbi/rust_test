@@ -286,7 +286,7 @@ impl Culling {
 
         let compute_pipeline = compute_pipelines[0];
 
-        Culling {
+        Culling { 
             pipeline_layout,
             uniform_buffer,
             uniform_buffer_gpu,
@@ -348,6 +348,33 @@ impl Culling {
             buffer: self.uniform_buffer_gpu.buffer,
             offset: 0,
             size: buffer_copy_regions.size,
+            ..Default::default()
+        };
+       
+        let arguments_barrier_clear = vk::BufferMemoryBarrier {
+            //src_access_mask: vk::AccessFlags::INDIRECT_COMMAND_READ,
+            dst_access_mask: vk::AccessFlags::TRANSFER_WRITE,
+            buffer: self.visibility_arguments.buffer,
+            offset: 0,
+            size: std::mem::size_of::<DrawIndexedIndirectArguments>() as u64,
+            ..Default::default()
+        };        
+
+        let arguments_barrier_compute = vk::BufferMemoryBarrier {
+            src_access_mask: vk::AccessFlags::TRANSFER_WRITE,
+            dst_access_mask: vk::AccessFlags::SHADER_READ | vk::AccessFlags::SHADER_WRITE,
+            buffer: self.visibility_arguments.buffer,
+            offset: 0,
+            size: std::mem::size_of::<DrawIndexedIndirectArguments>() as u64,
+            ..Default::default()
+        };
+
+        let arguments_barrier_indirect = vk::BufferMemoryBarrier {
+            src_access_mask: vk::AccessFlags::SHADER_READ | vk::AccessFlags::SHADER_WRITE,
+            dst_access_mask: vk::AccessFlags::INDIRECT_COMMAND_READ,
+            buffer: self.visibility_arguments.buffer,
+            offset: 0,
+            size: std::mem::size_of::<DrawIndexedIndirectArguments>() as u64,
             ..Default::default()
         };
 
@@ -430,6 +457,17 @@ impl Culling {
                 &[image_subresource_range],
             );
 
+            // Indirect arguments to GPU fill (clear)
+            device.cmd_pipeline_barrier(
+                *command_buffer,
+                vk::PipelineStageFlags::DRAW_INDIRECT,
+                vk::PipelineStageFlags::TRANSFER,
+                vk::DependencyFlags::empty(),
+                &[],
+                &[arguments_barrier_clear],
+                &[],
+            );
+
             // Clear the visible index count (remaining of the buffer stays)
             device.cmd_fill_buffer(
                 *command_buffer,
@@ -448,6 +486,17 @@ impl Culling {
                 &[],
                 &[],
                 &[barrier_pyramid_read],
+            );
+
+            // Indirect arguments to GPU write
+            device.cmd_pipeline_barrier(
+                *command_buffer,
+                vk::PipelineStageFlags::TRANSFER,
+                vk::PipelineStageFlags::COMPUTE_SHADER,
+                vk::DependencyFlags::empty(),
+                &[],
+                &[arguments_barrier_compute],
+                &[],
             );
 
             // Culling compute shader
@@ -479,6 +528,17 @@ impl Culling {
                 &[],
                 &[],
                 &[barrier_pyramid_rw],
+            );
+
+            // Indirect arguments to indirect draw
+            device.cmd_pipeline_barrier(
+                *command_buffer,
+                vk::PipelineStageFlags::COMPUTE_SHADER,
+                vk::PipelineStageFlags::DRAW_INDIRECT,
+                vk::DependencyFlags::empty(),
+                &[],
+                &[arguments_barrier_indirect],
+                &[],
             );
         }
     }
