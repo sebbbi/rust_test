@@ -91,14 +91,25 @@ impl VkImage {
         let image = unsafe { device.create_image(image_info, None) }.unwrap();
         let requirements = unsafe { device.get_image_memory_requirements(image) };
 
-        let allocation = allocator
-            .allocate(&AllocationCreateDesc {
+        let mut allocation = allocator.allocate(&AllocationCreateDesc {
+            name: "image",
+            requirements,
+            location,
+            linear: false,
+        });
+
+        // Workaround for gpu_allocator DEVICE_LOCAL memory running out on iGPUs
+        // TODO: Remove once gpu_allocator handles iGPUs properly!
+        if allocation.is_err() {
+            allocation = allocator.allocate(&AllocationCreateDesc {
                 name: "image",
                 requirements,
-                location,
+                location: MemoryLocation::CpuToGpu,
                 linear: false,
-            })
-            .unwrap();
+            });
+        };
+
+        let allocation = allocation.unwrap();
 
         unsafe {
             device

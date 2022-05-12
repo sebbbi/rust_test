@@ -62,12 +62,11 @@ impl SdfTexture {
             ..Default::default()
         };
 
-        //let image = VkImage::new(device, allocator, &texture_create_info, MemoryLocation::GpuOnly);
         let image = VkImage::new(
             device,
             allocator,
             &texture_create_info,
-            MemoryLocation::CpuToGpu,
+            MemoryLocation::GpuOnly,
         );
 
         let sampler_info = vk::SamplerCreateInfo {
